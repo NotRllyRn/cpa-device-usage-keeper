@@ -23,6 +23,9 @@ func configure(raw []byte) error {
 	runtime.Lock()
 	defer runtime.Unlock()
 	var cfg struct {
+		Enabled      *bool  `yaml:"enabled"`
+		Priority     int    `yaml:"priority"`
+		Store        any    `yaml:"store"`
 		Listen       string `yaml:"listen"`
 		DataDir      string `yaml:"data_dir"`
 		DashboardURL string `yaml:"dashboard_url"`

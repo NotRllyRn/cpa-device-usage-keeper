@@ -3,11 +3,12 @@ package device
 import (
 	"context"
 	"cpa-usage-keeper/internal/pricing"
+	"cpa-usage-keeper/web"
 	"crypto/subtle"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -193,8 +194,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == "GET" && r.URL.Path == "/" {
+		raw, err := fs.ReadFile(web.DeviceAssets(), "device.html")
+		if err != nil {
+			fail(w, 503, "dashboard build missing")
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, dashboard)
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'")
+		_, _ = w.Write(raw)
+		return
+	}
+	if r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/assets/") {
+		http.FileServer(http.FS(web.DeviceAssets())).ServeHTTP(w, r)
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(bearer(r)), []byte(s.admin)) != 1 {
@@ -202,6 +213,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case r.Method == "GET" && r.URL.Path == "/v1/overview":
+		q := r.URL.Query()
+		for _, key := range []string{"start", "end"} {
+			if value := q.Get(key); value != "" {
+				if _, err := time.Parse("2006-01-02", value); err != nil {
+					fail(w, 400, "invalid UTC date")
+					return
+				}
+			}
+		}
+		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 || q.Get("end") != "" && q.Get("start") > q.Get("end") {
+			fail(w, 400, "invalid filters")
+			return
+		}
+		overview, err := s.store.Overview(r.Context(), q.Get("device"), q.Get("agent"), q.Get("start"), q.Get("end"))
+		if err != nil {
+			fail(w, 503, "overview unavailable; narrow the range or retry")
+			return
+		}
+		jsonReply(w, 200, overview)
 	case r.Method == "GET" && r.URL.Path == "/v1/pricing/models":
 		prices, err := s.store.Prices()
 		if err != nil {
@@ -292,6 +323,3 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "not found")
 	}
 }
-
-//go:embed dashboard.html
-var dashboard string

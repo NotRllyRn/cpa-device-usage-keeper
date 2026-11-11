@@ -25,6 +25,8 @@ backups/
 web/node_modules/
 web/dist/
 web/dist-ssr/
+web/device-dist/*
+!web/device-dist/.gitkeep
 
 # logs
 logs/

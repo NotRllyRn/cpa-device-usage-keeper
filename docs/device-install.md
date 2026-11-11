@@ -1,7 +1,9 @@
 # Device collector and installation
 
-The uploader is implemented locally. **No approved release binaries exist yet**,
-so the installer is not currently a working public installation offer. Do not
+The uploader is implemented locally. Private test bundles can now be built and
+installed without a public release; follow [CPA and device testing](cpa-testing.md).
+**No approved public release binaries exist yet**, so the hosted release command
+below is not currently a working public installation offer. Do not
 run it on this machine or production as part of development.
 
 ## Release installation contract

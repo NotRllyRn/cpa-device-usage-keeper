@@ -5,7 +5,8 @@ process or container is needed. The user approved this design because CPA's
 resource routes cannot carry upload POST bodies. No CPA source patch is used.
 
 This is a tested local daily-usage implementation, not a published release.
-Supported-session reports and the full Keeper-style chart UI remain unfinished.
+Supported-session reports remain unfinished. The device UI now reuses Keeper
+components, styles, charts and its full pricing editor; see [test guide](../cpa-testing.md).
 
 ## Verified sources
 
@@ -94,12 +95,13 @@ is not automated, so do not claim backup restoration alone restores full history
 
 Native code shares CPA's process. HTTP deadlines/handler limits do not establish
 an OS-level memory or connection limit. A reverse proxy should enforce connection,
-request-rate, and body limits. Load and actual CPA-host integration testing remain
-necessary before production approval.
+request-rate, and body limits. Actual CPA v8.0.63 integration now passes in an isolated local host. Sustained
+load and the intended deployment still need testing before production approval.
 
 ## Local checks
 
 ```sh
+(cd web && npm ci --ignore-scripts --no-audit --no-fund && npx vite build --config vite.device.config.js)
 go test -race ./cmd/device-plugin ./internal/device ./internal/deviceclient ./cmd/device-sync
 go vet ./cmd/device-plugin ./internal/device ./internal/deviceclient ./cmd/device-sync
 CGO_ENABLED=1 go build -buildmode=c-shared -o /tmp/device-usage-keeper.so ./cmd/device-plugin
@@ -110,6 +112,7 @@ bash -n install.sh
 
 Linux/amd64 only is build-tested. The ctypes smoke test uses temporary synthetic
 state and the actual exported ABI: register, resource, reconfigure, shutdown and
-restart. It is not a claim that this library has been loaded into a live CPA host.
+restart. A separate isolated CPA v8.0.63 host test also passes registration, resource
+routing, UI serving, shutdown and restart (`scripts/test-cpa-host.py`).
 No production installation, deployment, secrets transfer, or public release has
 been performed. See [device installer](../device-install.md).

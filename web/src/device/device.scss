@@ -1,0 +1,14 @@
+.device-note { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 12px 0; }
+.device-error { color: #e35b6b; padding: 12px; }
+.device-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.device-chart { height: 280px; margin-top: 16px; }
+.device-table { overflow: auto; margin: 16px 0; }
+.device-table table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
+.device-table th, .device-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+.device-date { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.device-date input, .device-login input, [data-keeper-page] form input { color: inherit; background: transparent; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
+.device-login { max-width: 480px; margin: 15vh auto; padding: 20px; }
+.device-login form { display: grid; gap: 16px; margin: 20px 0; }
+.device-login label { display: grid; gap: 8px; }
+.device-token { display: block; overflow-wrap: anywhere; padding: 16px; font-family: monospace; }
+@media(max-width: 800px) { .device-charts { grid-template-columns: 1fr; } }
