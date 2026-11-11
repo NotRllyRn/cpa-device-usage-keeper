@@ -13,13 +13,19 @@ This fork starts from CPA Usage Keeper v2.1.0. It is intended to display retaine
 - Prefer CPA dashboard iframe access, with a standalone access path when feasible.
 - Never upload conversations, credentials, or raw session logs.
 
-## Deployment decision pending
+## Upstream and deployment
 
-An iframe presents a web application; it does not host its backend. Choose between a standalone backend and a CPA-native plugin after verifying the deployed host's plugin ABI, resource routing, upload authentication, storage, and lifecycle.
+This repository forks [Willxup/cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper), the standalone backend and dashboard.
 
-The independent rainoffallingstar/CPA-Usage-Keeper-Plugin project is a native shared-library implementation inspired by Keeper, not merely an iframe wrapper for this upstream application. Reusing that architecture requires compatibility and security review.
+Its official companion, [Willxup/cpa-plugin-usage-keeper](https://github.com/Willxup/cpa-plugin-usage-keeper), adds a CPA management dashboard entry that embeds the standalone application. It does not store usage or replace the backend. These are connected components, not competing installations.
 
-Keep the initial upstream code and MIT notices intact until this deployment decision is made. No device ingestion or plugin implementation is included yet.
+The similarly named `rainoffallingstar/CPA-Usage-Keeper-Plugin` is a separate native implementation. It is not the official companion, is not our upstream, and is not the basis for this project.
+
+The initial architecture keeps a standalone backend and prefers iframe access through the official companion. Verify its URL, authentication, and branding compatibility before deployment. Reuse the companion unchanged where possible; if modifications are needed, explicitly track its separate upstream and license. No companion source has been imported or forked here.
+
+A GitHub fork has one parent. Packaging both components in this repository later would not make it a GitHub fork of both projects. An iframe does not eliminate the need for a running backend. Replacing an existing Keeper deployment could avoid an additional container, but requires explicit deployment approval and a data migration/backup plan.
+
+Keep upstream code and MIT notices intact. No device ingestion or plugin implementation is included yet.
 
 ## Git workflow
 
