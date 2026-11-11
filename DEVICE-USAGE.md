@@ -21,7 +21,7 @@ Its official companion, [Willxup/cpa-plugin-usage-keeper](https://github.com/Wil
 
 The similarly named `rainoffallingstar/CPA-Usage-Keeper-Plugin` is a separate native implementation. It is not the official companion, is not our upstream, and is not the basis for this project.
 
-The initial architecture keeps a standalone backend and prefers iframe access through the official companion. Verify its URL, authentication, and branding compatibility before deployment. Reuse the companion unchanged where possible; if modifications are needed, explicitly track its separate upstream and license. No companion source has been imported or forked here.
+The latest implementation requirement is a native CPA plugin that hosts device ingestion, storage, pricing, and the embedded dashboard without a separate service stack. This supersedes the earlier standalone-backend plan. Verify CPA v8 plugin ABI, lifecycle, storage, resource routing, and upload-only authentication before implementation. The official companion currently embeds a separate service; it does not already supply this native backend. Track provenance and licenses for any reused companion code. No companion source has been imported or forked here. See IMPLEMENTATION-HANDOFF.md for the full implementation brief.
 
 A GitHub fork has one parent. Packaging both components in this repository later would not make it a GitHub fork of both projects. An iframe does not eliminate the need for a running backend. Replacing an existing Keeper deployment could avoid an additional container, but requires explicit deployment approval and a data migration/backup plan.
 
