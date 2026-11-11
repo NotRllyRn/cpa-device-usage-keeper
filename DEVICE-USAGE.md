@@ -21,11 +21,11 @@ Its official companion, [Willxup/cpa-plugin-usage-keeper](https://github.com/Wil
 
 The similarly named `rainoffallingstar/CPA-Usage-Keeper-Plugin` is a separate native implementation. It is not the official companion, is not our upstream, and is not the basis for this project.
 
-The latest implementation requirement is a native CPA plugin that hosts device ingestion, storage, pricing, and the embedded dashboard without a separate service stack. This supersedes the earlier standalone-backend plan. Verify CPA v8 plugin ABI, lifecycle, storage, resource routing, and upload-only authentication before implementation. The official companion currently embeds a separate service; it does not already supply this native backend. Track provenance and licenses for any reused companion code. No companion source has been imported or forked here. See IMPLEMENTATION-HANDOFF.md for the full implementation brief.
+The latest implementation requirement is a native CPA plugin that hosts device ingestion, storage, pricing, and the embedded dashboard without a separate service stack. This supersedes the earlier standalone-backend plan. Verify CPA v8 plugin ABI, lifecycle, storage, resource routing, and upload-only authentication before implementation. The official companion currently embeds a separate service; it does not already supply this native backend. Track provenance and licenses for any reused companion code. Only the companion's small native C ABI shim has been adapted for the local hosting proof, with its MIT notice and pinned provenance retained in docs/native/. See IMPLEMENTATION-HANDOFF.md for the full implementation brief.
 
 A GitHub fork has one parent. Packaging both components in this repository later would not make it a GitHub fork of both projects. An iframe does not eliminate the need for a running backend. Replacing an existing Keeper deployment could avoid an additional container, but requires explicit deployment approval and a data migration/backup plan.
 
-Keep upstream code and MIT notices intact. No device ingestion or plugin implementation is included yet.
+Keep upstream code and MIT notices intact. A local native ABI/static-page proof is included; device ingestion is not implemented. See [native hosting findings](docs/native/README.md) for the upload-routing blocker and options.
 
 ## Git workflow
 

@@ -17,7 +17,7 @@ Device reports are aggregates, not requests. Request latency, TTFT, TPS, success
 
 **Early development.** The fork is based on upstream **v2.1.0**. Device ingestion is not implemented yet; the application still has upstream behavior. There is no device-ready release or installation procedure.
 
-The target deployment is a native CPA plugin with an embedded dashboard and no separate backend service stack. This is not implemented yet. The official [Keeper embedding plugin](https://github.com/Willxup/cpa-plugin-usage-keeper) only embeds the existing standalone application; hosting our backend inside CPA requires additional integration. See the [implementation handoff](IMPLEMENTATION-HANDOFF.md).
+The target deployment is a native CPA plugin with an embedded dashboard and no separate backend service stack. A [local native hosting proof](docs/native/README.md) exists; device uploads are blocked on a CPA routing decision. The full dashboard/backend is not implemented yet. The official [Keeper embedding plugin](https://github.com/Willxup/cpa-plugin-usage-keeper) only embeds the existing standalone application; hosting our backend inside CPA requires additional integration. See the [implementation handoff](IMPLEMENTATION-HANDOFF.md).
 
 See [project scope](DEVICE-USAGE.md) and the [upstream reference](docs/upstream/README.md) for details.
 
