@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"cpa-usage-keeper/internal/device"
+	device "cpa-usage-keeper/internal/devicereport"
 )
 
 const fixture = `{"daily":[{"period":"2026-01-02","agent":"all","agents":[{"agent":"pi","inputTokens":100,"outputTokens":20,"cacheReadTokens":10,"cacheCreationTokens":0,"totalTokens":140,"modelBreakdowns":[{"modelName":"[pi] example/model","inputTokens":90,"outputTokens":20,"cacheReadTokens":10,"cacheCreationTokens":0,"cost":999}],"projectPath":"/private/path","totalCost":999}]}],"totals":{}}`

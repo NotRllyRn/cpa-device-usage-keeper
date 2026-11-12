@@ -17,10 +17,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
+
 	"time"
 
-	"cpa-usage-keeper/internal/device"
+	device "cpa-usage-keeper/internal/devicereport"
 )
 
 const CollectorVersion = "20.0.43"
@@ -56,10 +56,10 @@ func PrivateDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+	if !info.IsDir() || !privateMode(info) {
 		return errors.New("state directory must be private (0700)")
 	}
-	return nil
+	return secureDirectory(dir)
 }
 func Save(path string, v any) error {
 	raw, err := json.MarshalIndent(v, "", "  ")
@@ -81,22 +81,17 @@ func Save(path string, v any) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	if err = os.Rename(f.Name(), path); err != nil {
+	if err = replaceFile(f.Name(), path); err != nil {
 		return err
 	}
-	dir, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
+	return syncDir(filepath.Dir(path))
 }
 func Load(path string, v any) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !info.Mode().IsRegular() || !privateMode(info) {
 		return errors.New("state file must be private")
 	}
 	raw, err := os.ReadFile(path)
@@ -162,7 +157,7 @@ func Run(ctx context.Context, dir string) error {
 		return err
 	}
 	defer lock.Close()
-	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err = lockFile(lock); err != nil {
 		return errors.New("another sync is running")
 	}
 	var c Config

@@ -1,5 +1,8 @@
 # Device collector and installation
 
+For macOS and Windows private test bundles, see [device platforms](device-platforms.md).
+The Linux release workflow below is separate from those platform installers.
+
 The uploader is implemented locally. Private test bundles can now be built and
 installed without a public release; follow [CPA and device testing](cpa-testing.md).
 **No approved public release binaries exist yet**, so the hosted release command

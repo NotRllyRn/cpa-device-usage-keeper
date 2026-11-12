@@ -2,6 +2,10 @@
 # Device installer: Linux x86_64 with a user systemd instance. No root/npm needed.
 set -euo pipefail
 umask 077
+if [[ "$(uname -s)" == Darwin ]]; then
+  base="${DEVICE_USAGE_BUNDLE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+  exec bash "$base/install-macos.sh" "$@"
+fi
 mode="${1:-install}"
 [[ -z "${DEVICE_USAGE_STATE:-}" ]] || { echo 'Installer supports only the default state directory; custom state requires manual scheduling.' >&2; exit 1; }
 bin="$HOME/.local/bin"

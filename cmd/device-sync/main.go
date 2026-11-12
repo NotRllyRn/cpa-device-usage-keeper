@@ -5,11 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/term"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
-	"unsafe"
 
 	"cpa-usage-keeper/internal/deviceclient"
 )
@@ -43,6 +43,9 @@ func run() error {
 	case "sync":
 		return deviceclient.Run(context.Background(), dir)
 	case "status":
+		if err := deviceclient.PrivateDir(dir); err != nil {
+			return err
+		}
 		var state deviceclient.State
 		if err := deviceclient.Load(filepath.Join(dir, "state.json"), &state); err != nil {
 			return err
@@ -65,14 +68,18 @@ func run() error {
 				return errors.New("configuration/state already exists or is inaccessible; preserve it, use update or a fresh directory with a newly enrolled device")
 			}
 		}
-		tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		terminal := "/dev/tty"
+		if runtime.GOOS == "windows" {
+			terminal = "CONIN$"
+		}
+		tty, err := os.OpenFile(terminal, os.O_RDWR, 0)
 		if err != nil {
 			return errors.New("interactive terminal required")
 		}
 		defer tty.Close()
 		reader := bufio.NewReader(tty)
 		prompt := func(label string) (string, error) {
-			fmt.Fprint(tty, label)
+			fmt.Fprint(os.Stderr, label)
 			v, e := reader.ReadString('\n')
 			return strings.TrimSpace(v), e
 		}
@@ -80,28 +87,17 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		// Linux-only release target: use termios directly rather than putting a
-		// secret in argv, shell history, or a visible terminal prompt.
-		var original syscall.Termios
-		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TCGETS, uintptr(unsafe.Pointer(&original))); errno != 0 {
-			return errno
-		}
-		hidden := original
-		hidden.Lflag &^= syscall.ECHO
-		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TCSETS, uintptr(unsafe.Pointer(&hidden))); errno != 0 {
-			return errno
-		}
-		restore := func() {
-			syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TCSETS, uintptr(unsafe.Pointer(&original)))
-		}
-		defer restore()
-		token, err := prompt("Upload-only token (hidden): ")
-		restore()
-		fmt.Fprintln(tty)
+		fmt.Fprint(os.Stderr, "Upload-only token (hidden): ")
+		secret, err := term.ReadPassword(int(tty.Fd()))
+		token := strings.TrimSpace(string(secret))
+		fmt.Fprintln(os.Stderr)
 		if err != nil {
 			return err
 		}
 		collector := filepath.Join(home, ".local", "lib", "device-usage-keeper", "ccusage")
+		if runtime.GOOS == "windows" {
+			collector += ".exe"
+		}
 		config := filepath.Join(dir, "ccusage.json")
 		c := deviceclient.Config{URL: endpoint, Token: token, Collector: collector, CollectorConfig: config}
 		if err = deviceclient.ValidateConfig(c); err != nil {

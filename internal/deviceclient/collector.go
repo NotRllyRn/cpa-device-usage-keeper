@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"cpa-usage-keeper/internal/device"
+	device "cpa-usage-keeper/internal/devicereport"
 )
 
 // ParseDaily consumes ccusage reports, not original agent logs. Only whitelisted
