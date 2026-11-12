@@ -7,7 +7,7 @@ import styles from '@/pages/UsagePage.module.scss';
 const TOOLTIP_OFFSET = 8;
 const TOOLTIP_SAFE_WIDTH = 220;
 const TOOLTIP_SAFE_HEIGHT = 120;
-const ACTIVITY_GRID_ROWS = 7;
+const DEFAULT_GRID_ROWS = 7;
 const ACTIVITY_GRID_COLUMNS = 52;
 
 type TooltipHorizontalPosition = 'center' | 'left' | 'right';
@@ -61,6 +61,7 @@ export function formatActivityDateTime(timestamp: number, formatter: Intl.DateTi
 
 export interface ActivityHeatmapGridProps {
   blocks: UsageActivityBlock[];
+  compactDaily?: boolean;
   timeZone?: string;
   requestIdentity: string;
   ariaLabel: string;
@@ -72,6 +73,7 @@ export interface ActivityHeatmapGridProps {
 
 export function ActivityHeatmapGrid({
   blocks,
+  compactDaily = false,
   timeZone,
   requestIdentity,
   ariaLabel,
@@ -80,6 +82,8 @@ export function ActivityHeatmapGrid({
   getSummary,
   renderTooltipStats,
 }: ActivityHeatmapGridProps) {
+  // Short daily ranges are a single row; longer ranges retain weekly columns.
+  const ACTIVITY_GRID_ROWS = compactDaily && blocks.length <= 7 ? 1 : DEFAULT_GRID_ROWS;
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltipState | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -218,7 +222,7 @@ export function ActivityHeatmapGrid({
     event.preventDefault();
     setFocusedIndex(nextIndex);
     cellRefs.current[nextIndex]?.focus();
-  }, [blocks.length]);
+  }, [blocks.length, ACTIVITY_GRID_ROWS]);
 
   const rovingIndex = Math.min(focusedIndex, Math.max(0, blocks.length - 1));
 
@@ -251,14 +255,15 @@ export function ActivityHeatmapGrid({
   };
 
   return (
-    <div className={styles.activityHeatmapScroller}>
+    <div className={styles.activityHeatmapScroller} style={compactDaily ? { overflowX: 'auto' } : undefined}>
       <div
         ref={gridRef}
         className={styles.activityHeatmapGrid}
         role="grid"
         aria-label={ariaLabel}
         aria-rowcount={ACTIVITY_GRID_ROWS}
-        aria-colcount={ACTIVITY_GRID_COLUMNS}
+        aria-colcount={compactDaily ? Math.max(1, Math.ceil(blocks.length / ACTIVITY_GRID_ROWS)) : ACTIVITY_GRID_COLUMNS}
+        style={compactDaily ? { gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(blocks.length / ACTIVITY_GRID_ROWS))}, 18px)`, gridTemplateRows: `repeat(${Math.min(ACTIVITY_GRID_ROWS, blocks.length)}, 18px)`, aspectRatio: 'auto', justifyContent: 'start' } : undefined}
       >
         {blocks.map((block, index) => {
           const idle = isIdle(block, index);

@@ -258,25 +258,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(w, 502, "pricing source unavailable")
 			return
 		}
-		overview, err := s.store.Overview(r.Context(), "", "", "", "")
+		models, err := s.store.PricingModelIdentifiers(r.Context())
 		if err != nil {
 			fail(w, 503, "model list unavailable")
-			return
-		}
-		prices, err := s.store.Prices()
-		if err != nil {
-			fail(w, 503, "pricing unavailable")
-			return
-		}
-		models := []string{}
-		for _, model := range overview.Models {
-			models = append(models, model.Key)
-		}
-		for _, model := range prices {
-			models = append(models, model.Model)
-		}
-		if len(models) > 10000 {
-			fail(w, 400, "too many models")
 			return
 		}
 		jsonReply(w, 200, service.MatchCompletePricingCatalog(models, catalog))

@@ -978,6 +978,20 @@
   }
 }
 
+// Equal aggregate tracks keep daily-average labels readable; wrap on tablets.
+.aggregateStatsRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: visible;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .primaryStatSlot {
   display: flex;
   flex: 1 1 0;

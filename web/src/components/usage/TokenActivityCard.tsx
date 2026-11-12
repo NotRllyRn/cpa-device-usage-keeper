@@ -70,7 +70,7 @@ export function TokenActivityCard({ activity, loading, requestIdentity, aggregat
         </div>
       </div>
       {blocks.length ? (
-        <ActivityHeatmapGrid
+        <ActivityHeatmapGrid compactDaily={aggregateMode}
           blocks={blocks}
           timeZone={projectTimeZone}
           requestIdentity={requestIdentity}

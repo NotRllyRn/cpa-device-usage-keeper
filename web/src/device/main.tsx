@@ -46,7 +46,8 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const [syncPrices, setSyncPrices] = useState(false);
   const [manualModel, setManualModel] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
-  const [filters, setFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, ...rangeDates('7d') }));
+  const [loadedDates, setLoadedDates] = useState(() => rangeDates('7d'));
   const [overview, setOverview] = useState<Overview | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [prices, setPrices] = useState<ModelPricingConfig[]>([]);
@@ -60,14 +61,15 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const refresh = useCallback(async () => {
     const id = ++request.current; setBusy(true); setError('');
     try {
-      const [data, list, configs] = await Promise.all([api.overview(filters), api.devices(), api.prices()]);
+      const dates = rangeDates(range, customRange);
+      const [data, list, configs] = await Promise.all([api.overview({ ...filters, ...dates }), api.devices(), api.prices()]);
       if (id !== request.current) return false;
-      setOverview(data); setDevices(list); setPrices(configs);
+      setOverview(data); setLoadedDates(dates); setDevices(list); setPrices(configs);
       setModelOptions(old => [...new Set([...old, ...data.models.map(m => m.key), ...configs.map(p => p.model)])].sort());
       return true;
     } catch (e) { if (id === request.current) { setError(message(e)); setOverview(null); } return false; }
     finally { if (id === request.current) setBusy(false); }
-  }, [api, filters]);
+  }, [api, filters, range, customRange]);
   useEffect(() => {
     void refresh();
     // This is a monotonic request generation, not a DOM ref. Invalidate every
@@ -88,7 +90,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
     saveModel: async config => ({ result: { model: config.model, config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models', 'PUT', config)) }),
     deleteModel: async model => ({ result: { config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models?model=' + encodeURIComponent(model), 'DELETE')) }),
   };
-  const dashboard = overview ? dashboardData(overview, devices, filters.start, filters.end) : null;
+  const dashboard = overview ? dashboardData(overview, devices, loadedDates.start, loadedDates.end) : null;
   const filter = (key: keyof Filters, value: string) => setFilters(old => ({ ...old, [key]: value }));
   return <div className={`${styles.pageShell} ${styles.standalone}`} data-keeper-page="usage"><div className={styles.pageFrame}>
     <DashboardHeader identity="Device Usage Keeper" onLogout={onLogout} />

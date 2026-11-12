@@ -309,7 +309,7 @@ export function StatCards({
   return (
     <div className={styles.statsSection}>
       <div
-        className={`${styles.primaryStatsRow} ${dailyAverageExpanded ? styles.primaryStatsRowExpanded : ''}`.trim()}
+        className={`${styles.primaryStatsRow} ${dailyAverageExpanded ? styles.primaryStatsRowExpanded : ''} ${aggregateMode ? styles.aggregateStatsRow : ''}`.trim()}
       >
         <div className={styles.dailyAverageSlot} aria-hidden={!dailyAverageExpanded}>
           <DailyAverageCard aggregateMode={aggregateMode} usage={dailyAverageUsage} loading={loading} />

@@ -10,7 +10,8 @@ Dates are UTC; missing days contribute zero to the selected calendar-day average
 Token Trends uses actual daily model/device totals, not inferred hourly traffic.
 Model distribution excludes unattributed tokens; overall totals retain them.
 Request health, request counts, throughput, latency and reasoning breakdowns are
-not shown. Daily activity uses the upstream seven-row heatmap layout. Unsupported
+not shown. Daily activity reuses the upstream heatmap with compact cells: up to seven days
+form one keyboard-accessible row; longer ranges use weekly columns. Unsupported
 hour ranges are omitted; the upstream custom picker retains its 365-day limit.
 
 Sync uses the upstream modal and matching candidate ordering. The device adapter
@@ -18,7 +19,11 @@ requires an exact catalog identity (or the established `[pi] ` prefix removal)
 and all four explicit rates. Incomplete catalog entries remain unmatched rather
 than becoming free. Apply is transactional and changes only base rates, retaining
 stored style, multipliers and branches. Management authentication and existing
-request-size bounds apply; batches are limited to 1,000 models.
+request-size bounds apply; batches are limited to 1,000 models. Sync discovers
+identifiers with a dedicated context-bounded distinct query, not a historical
+usage aggregation. Shared-view input includes cache reads/writes for correct
+cache percentages; the model table retains exclusive input counts. Relative
+ranges resolve at every refresh and login; custom dates remain fixed.
 
 ## Reproduce local checks
 

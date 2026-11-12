@@ -87,6 +87,8 @@ try {
   }
   await page.locator('[data-time-range-trigger="desktop"]').click();
   if(target==='device') assert.equal(await page.locator('[data-time-range-mode="hour"]').count(),0);
+  await page.locator('[data-time-range-mode="day"]').click();
+  await page.screenshot({path:`${output}/${target}-${theme}-days.png`});
   await page.locator('[data-time-range-mode="custom"]').click();
   await page.screenshot({path:`${output}/${target}-${theme}-range.png`});
   await page.locator('[data-custom-endpoint="start"]').click();
@@ -98,6 +100,36 @@ try {
   await page.getByRole('button',{name:'Fetch',exact:true}).click();
   await page.locator('[data-sync-model]').first().waitFor();
   await page.screenshot({path:`${output}/${target}-${theme}-sync.png`});
+  if(target==='device') {
+    await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click();
+    await navigate(page,'Overview');
+    assert.equal(await page.locator('[data-activity-index]').count(),7);
+    const firstDay = page.locator('[data-activity-index="0"]');
+    await firstDay.focus(); await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('[data-activity-index="1"]').evaluate(el=>el===document.activeElement),true);
+    await page.keyboard.press('Escape');
+    await page.locator('[data-dashboard-refresh]').focus();
+    for(const width of [390,768]) {
+      await page.setViewportSize({width,height:1000});
+      await page.waitForTimeout(400);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,`overflow at ${width}`);
+      await page.screenshot({path:`${output}/device-${theme}-${width}-overview.png`,fullPage:true});
+    }
+  }
+  if(target==='device') {
+    await page.clock.setSystemTime(new Date('2026-11-10T00:01:00Z'));
+    const nextRequest=page.waitForRequest(req=>req.url().includes('/v1/overview?'));
+    await page.locator('[data-dashboard-refresh]').click();
+    const params=new URL((await nextRequest).url()).searchParams;
+    assert.equal(params.get('start'),'2026-11-04');
+    assert.equal(params.get('end'),'2026-11-10');
+    // A fresh login resolves relative dates now, not at JS module evaluation.
+    await page.reload();
+    await page.getByLabel('Admin token').fill('synthetic-only');
+    const loginRequest=page.waitForRequest(req=>req.url().includes('/v1/overview?'));
+    await page.getByRole('button',{name:'Connect',exact:true}).click();
+    assert.equal(new URL((await loginRequest).url()).searchParams.get('end'),'2026-11-10');
+  }
   assert.deepEqual(errors,[],`${target} ${theme} page errors`);
   await page.close();
  }

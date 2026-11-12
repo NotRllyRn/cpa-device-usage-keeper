@@ -20,7 +20,7 @@ export function dashboardData(data: Overview, devices: Device[], start: string, 
     key: value.key, label: dimension === 'devices' ? devices.find(device => device.id === value.key)?.name ?? value.key : value.key,
     // Structural compatibility only: aggregateMode never renders request/reasoning fields.
     requests: 0, failures: 0, reasoning_tokens: 0,
-    input_tokens: value.tokens.input, output_tokens: value.tokens.output, cache_read_tokens: value.tokens.cache_read,
+    input_tokens: value.tokens.input + value.tokens.cache_read + value.tokens.cache_write, output_tokens: value.tokens.output, cache_read_tokens: value.tokens.cache_read,
     cache_creation_tokens: value.tokens.cache_write, total_tokens: value.total_tokens, cost: value.complete ? value.known_cost : null,
     token_series: buckets.map(day => rows.get(day)?.[dimension].find(row => row.key === value.key)?.total_tokens ?? 0),
   }));
@@ -28,11 +28,11 @@ export function dashboardData(data: Overview, devices: Device[], start: string, 
   const total = data.total;
   const usage: UsageOverviewPayload = { usage: { total_tokens: total.total_tokens }, summary: {
     rpm: 0, tpm: 0, reasoning_tokens: 0, daily_average_requests: 0,
-    input_tokens: total.tokens.input + total.tokens.cache_read, cache_read_tokens: total.tokens.cache_read,
+    input_tokens: total.tokens.input + total.tokens.cache_read + total.tokens.cache_write, cache_read_tokens: total.tokens.cache_read,
     cache_creation_tokens: total.tokens.cache_write, total_cost: total.known_cost, cost_available: total.complete,
     daily_average_tokens: total.total_tokens / Math.max(1, buckets.length), daily_average_cost: total.known_cost / Math.max(1, buckets.length), daily_average_range_days: buckets.length,
   }};
-  const tokens = (value?: Aggregate) => ({ input_tokens: value?.tokens.input ?? 0, output_tokens: value?.tokens.output ?? 0, cache_read_tokens: value?.tokens.cache_read ?? 0, cache_creation_tokens: value?.tokens.cache_write ?? 0, reasoning_tokens: 0, total_tokens: value?.total_tokens ?? 0 });
+  const tokens = (value?: Aggregate) => ({ input_tokens: value ? value.tokens.input + value.tokens.cache_read + value.tokens.cache_write : 0, output_tokens: value?.tokens.output ?? 0, cache_read_tokens: value?.tokens.cache_read ?? 0, cache_creation_tokens: value?.tokens.cache_write ?? 0, reasoning_tokens: 0, total_tokens: value?.total_tokens ?? 0 });
   const activity: UsageActivityResponse = {
     window: 'month', grain: 'daily', timezone: 'UTC', total_success: 0, total_failure: 0, success_rate: 0,
     ...tokens(total), rows: 1, columns: buckets.length, bucket_seconds: 86400, window_start: start + 'T00:00:00Z', window_end: end + 'T23:59:59Z',
