@@ -23,6 +23,7 @@ export interface PricingSettingsProps {
   enabled?: boolean
   /** Aggregate adapters reprice on read; no request recalculation or sync jobs. */
   aggregateMode?: boolean
+  onSyncPrices?: () => void
   onAuthRequired?: () => void
   timezone?: string
   onRecalculationSettled?: (task: PricingRecalculationTask) => void
@@ -34,7 +35,7 @@ export interface PricingSettingsHandle {
 
 // 完整模型配置列表负责添加、编辑与删除；写成功后重读配置，不改写历史费用。
 export const PricingSettings = forwardRef<PricingSettingsHandle, PricingSettingsProps>(function PricingSettings(
-  { pricing, enabled = true, aggregateMode = false, onAuthRequired, timezone, onRecalculationSettled }: PricingSettingsProps,
+  { pricing, enabled = true, aggregateMode = false, onSyncPrices, onAuthRequired, timezone, onRecalculationSettled }: PricingSettingsProps,
   ref,
 ) {
   const { t } = useTranslation()
@@ -125,8 +126,8 @@ export const PricingSettings = forwardRef<PricingSettingsHandle, PricingSettings
         <span className={filterStyles.credentialProviderFilterCount}>{pricing.models.length}</span>
       </div>
       <div className={styles.headerActions}>
-        <Button type="button" variant="secondary" appearance="action" disabled={aggregateMode || pricingLocked || pricing.loading || Boolean(pricing.error)}
-          onClick={() => { setNotice(''); setSyncOpen(true) }}><IconRefreshCw size={16} />{t('usage_stats.pricing_settings_sync_title')}</Button>
+        <Button type="button" variant="secondary" appearance="action" disabled={(aggregateMode && !onSyncPrices) || pricingLocked || pricing.loading || Boolean(pricing.error)}
+          onClick={() => { setNotice(''); if (onSyncPrices) onSyncPrices(); else setSyncOpen(true) }}><IconRefreshCw size={16} />{t('usage_stats.pricing_settings_sync_title')}</Button>
         <Button type="button" variant="secondary" appearance="action" disabled={aggregateMode || pricingLocked || pricing.loading || Boolean(pricing.error) || pricing.configRevision === null}
           onClick={() => { setNotice(''); setRecalculationOpen(true) }}><IconHistory size={16} />{t('usage_stats.pricing_recalculation_title')}</Button>
         <Button type="button" appearance="action" disabled={pricingLocked || !availableModels.length || pricing.loading}

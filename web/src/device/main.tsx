@@ -7,6 +7,7 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardToolbar } from '@/components/dashboard/DashboardToolbar';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { PriceCatalog } from './PriceCatalog';
 import { PricingSettings } from '@/components/usage/pricing/PricingSettings';
 import type { UseModelPricingDataReturn } from '@/components/usage/hooks/useModelPricingData';
 import type { ModelPricingConfig } from '@/lib/types';
@@ -40,6 +41,8 @@ function Card({ title, value, note }: { title: string; value: string; note: stri
   </div>;
 }
 function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) {
+  const [syncPrices, setSyncPrices] = useState(false);
+  const [manualModel, setManualModel] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
   const [filters, setFilters] = useState(emptyFilters);
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -100,7 +103,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       {tab === 'overview' && <>
         <div className={styles.secondaryStatsGrid}>
           <Card title="Total tokens" value={total ? number(total.total_tokens) : '—'} note="All retained data in selected range" />
-          <Card title="Estimated cost" value={total ? money(total.known_cost) : '—'} note={total?.complete ? 'Complete at current model rates' : 'Incomplete — known subtotal only; missing allocations/prices are unknown'} />
+          <Card title="Estimated cost" value={total ? (!total.complete && total.known_cost === 0 ? 'Unknown' : money(total.known_cost)) : '—'} note={total?.complete ? 'Complete at current model rates' : 'Incomplete — known subtotal only; missing allocations/prices are unknown'} />
           <Card title="Requests / success rate" value="Unavailable" note="Daily device aggregates do not contain request outcomes" />
           <Card title="Latency / TTFT / TPS" value="Unavailable" note="No reliable request timing; no inferred performance" />
         </div>
@@ -114,7 +117,8 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       {tab === 'devices' && <section className={styles.statCard}><h2>Devices</h2><form onSubmit={e => { e.preventDefault(); void mutate(async () => { const result = await api.request<{ token: string }>('/devices', 'POST', { name }); setEnrollment(result.token); setName(''); }).catch(e => setError(message(e))); }}><label>Device name <input required pattern="[a-zA-Z0-9][a-zA-Z0-9._:+\-]{0,159}" value={name} onChange={e => setName(e.target.value)} /></label><Button type="submit" disabled={busy}>Enroll</Button></form>
         {enrollment && <div role="status"><p>Upload token (shown only here; enter privately into the installer):</p><output className="device-token">{enrollment}</output><Button onClick={() => setEnrollment('')}>Dismiss token</Button></div>}
         <div className="device-table"><table><thead><tr><th>Device</th><th>Last upload received</th><th>Status</th><th>Action</th></tr></thead><tbody>{devices.map(d => <tr key={d.id}><td>{d.name}</td><td>{d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'}</td><td>{d.revoked ? 'Revoked' : 'Active'}</td><td><Button disabled={d.revoked || busy} variant="danger" onClick={() => { if (confirm('Revoke uploads for ' + d.name + '? History is retained.')) void mutate(() => api.request('/devices/' + d.id, 'DELETE')).catch(e => setError(message(e))); }}>Revoke</Button></td></tr>)}</tbody></table></div><p className="device-note">Copied histories across devices overlap. Filter old/replacement devices rather than summing both. Enrollment is capped at 1,000, including revoked devices.</p></section>}
-      {tab === 'settings' && <><p className="device-note">Keeper Model Pricing Settings. Historical estimates update immediately on read. Sync and request-recalculation jobs are disabled. Request-dependent rules can be saved, but produce unknown daily costs.</p><PricingSettings pricing={pricing} aggregateMode timezone="UTC" /></>}
+      {tab === 'settings' && <><p className="device-note">Keeper Model Pricing Settings. Use Add for uploaded models, or Sync Prices to select and review source rates. Saving immediately refreshes historical estimates and the model breakdown. Recalculate Costs is unnecessary: aggregate costs are recalculated on every read. Request-dependent rules produce unknown daily costs.</p><label>Additional model identifier <input value={manualModel} onChange={e => setManualModel(e.target.value)} /></label><Button disabled={!manualModel.trim()} onClick={() => { setModelOptions(old => [...new Set([...old, manualModel.trim()])].sort()); setManualModel(''); }}>Add to model choices</Button><p>{modelOptions.length} model choices · {prices.length} configured. Add is unavailable only while loading or when all choices already have settings; use Edit for those models.</p><PricingSettings pricing={pricing} aggregateMode onSyncPrices={() => setSyncPrices(true)} timezone="UTC" /></>}
+      {syncPrices && <PriceCatalog api={api} models={modelOptions} onClose={() => setSyncPrices(false)} onSave={pricing.saveModel} />}
       <p className="device-note">Unavailable for device aggregates: realtime traffic, request events, credentials, quotas, success rates, request speed and latency.</p>
     </div></main>
   </div></div>;

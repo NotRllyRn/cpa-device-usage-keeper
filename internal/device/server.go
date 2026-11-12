@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"cpa-usage-keeper/internal/pricing"
+	"cpa-usage-keeper/internal/pricingmetadata"
 	"cpa-usage-keeper/web"
 	"crypto/subtle"
 	"encoding/json"
@@ -233,6 +234,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonReply(w, 200, overview)
+	case r.Method == "GET" && r.URL.Path == "/v1/pricing/catalog":
+		source := r.URL.Query().Get("source")
+		if _, err := pricingmetadata.SourceByID(source); err != nil {
+			fail(w, 400, "unsupported pricing source")
+			return
+		}
+		catalog, err := pricingmetadata.NewClient(&http.Client{Timeout: 12 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}).Fetch(r.Context(), source)
+		if err != nil {
+			fail(w, 502, "pricing source unavailable")
+			return
+		}
+		jsonReply(w, 200, catalog)
 	case r.Method == "GET" && r.URL.Path == "/v1/pricing/models":
 		prices, err := s.store.Prices()
 		if err != nil {
