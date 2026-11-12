@@ -19,14 +19,20 @@ type Aggregate struct {
 	Cost     float64 `json:"known_cost"`
 	Complete bool    `json:"complete"`
 }
+type DailyBreakdown struct {
+	Day     string      `json:"day"`
+	Models  []Aggregate `json:"models"`
+	Devices []Aggregate `json:"devices"`
+}
 type Overview struct {
-	Total       Aggregate   `json:"total"`
-	Days        []Aggregate `json:"days"`
-	Models      []Aggregate `json:"models"`
-	Devices     []Aggregate `json:"devices"`
-	Agents      []string    `json:"agents"`
-	CollectedAt time.Time   `json:"collected_at"`
-	Snapshots   int         `json:"snapshots"`
+	Breakdown   []DailyBreakdown `json:"breakdown"`
+	Total       Aggregate        `json:"total"`
+	Days        []Aggregate      `json:"days"`
+	Models      []Aggregate      `json:"models"`
+	Devices     []Aggregate      `json:"devices"`
+	Agents      []string         `json:"agents"`
+	CollectedAt time.Time        `json:"collected_at"`
+	Snapshots   int              `json:"snapshots"`
 }
 
 func addTokens(a *Tokens, b Tokens) {
@@ -96,6 +102,8 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 	defer rows.Close()
 	days, models, devices := map[string]*Aggregate{}, map[string]*Aggregate{}, map[string]*Aggregate{}
 	agents := map[string]bool{}
+	breakdownCells := 0
+	dayModels, dayDevices := map[string]map[string]*Aggregate{}, map[string]map[string]*Aggregate{}
 	for rows.Next() {
 		out.Snapshots++
 		if out.Snapshots > 100000 {
@@ -111,6 +119,10 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 			return out, err
 		}
 		agents[snapshot.Agent] = true
+		if dayModels[snapshot.Day] == nil {
+			dayModels[snapshot.Day] = map[string]*Aggregate{}
+			dayDevices[snapshot.Day] = map[string]*Aggregate{}
+		}
 		if snapshot.CollectedAt.After(out.CollectedAt) {
 			out.CollectedAt = snapshot.CollectedAt
 		}
@@ -126,6 +138,13 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 			a.Cost += v.Cost
 			a.Complete = a.Complete && v.Complete
 			addAggregate(bucket(models, m.Name), v)
+			if dayModels[snapshot.Day][m.Name] == nil {
+				breakdownCells++
+			}
+			if breakdownCells > 100000 {
+				return out, errors.New("range exceeds 100000 breakdown cells; narrow the filters")
+			}
+			addAggregate(bucket(dayModels[snapshot.Day], m.Name), v)
 		}
 		if assigned != a.Total {
 			a.Complete = false
@@ -133,6 +152,13 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		addAggregate(&out.Total, a)
 		addAggregate(bucket(days, snapshot.Day), a)
 		addAggregate(bucket(devices, id), a)
+		if dayDevices[snapshot.Day][id] == nil {
+			breakdownCells++
+		}
+		if breakdownCells > 100000 {
+			return out, errors.New("range exceeds 100000 breakdown cells; narrow the filters")
+		}
+		addAggregate(bucket(dayDevices[snapshot.Day], id), a)
 		if len(models) > 10000 || len(agents) > 1000 {
 			return out, errors.New("range has too many identifiers; narrow the filters")
 		}
@@ -141,6 +167,9 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		return out, err
 	}
 	out.Days = sortedBuckets(days)
+	for _, day := range out.Days {
+		out.Breakdown = append(out.Breakdown, DailyBreakdown{Day: day.Key, Models: sortedBuckets(dayModels[day.Key]), Devices: sortedBuckets(dayDevices[day.Key])})
+	}
 	out.Models = sortedBuckets(models)
 	out.Devices = sortedBuckets(devices)
 	out.Agents = make([]string, 0, len(agents))

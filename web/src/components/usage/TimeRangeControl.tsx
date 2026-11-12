@@ -76,6 +76,7 @@ const LIQUID_PARTICLE_MOTION_CLASSES: Record<LiquidParticleMotion, string> = {
 };
 
 interface RangePanelProps {
+  dailyOnly?: boolean;
   mode: UsageTimeRangeMode;
   rollingValues: Record<RollingUnit, number>;
   customRange: UsageCustomRange;
@@ -94,6 +95,7 @@ interface RangePanelProps {
 }
 
 function TimeRangePanel({
+  dailyOnly = false,
   mode,
   rollingValues,
   customRange,
@@ -129,7 +131,7 @@ function TimeRangePanel({
   return (
     <div className={styles.rangePanel}>
       <div className={styles.modeSelector} role="group" aria-label={t('usage_stats.range_filter')}>
-        {MODE_OPTIONS.map((option) => (
+        {MODE_OPTIONS.filter(option => !dailyOnly || option.value !== 'hour').map((option) => (
           <button
             key={option.value}
             type="button"
@@ -212,7 +214,7 @@ function TimeRangePanel({
           </div>
         </div>
       ) : mode === 'custom' ? (
-        <CustomRangePanel
+        <CustomRangePanel dailyOnly={dailyOnly}
           value={customRange}
           timeZone={timeZone}
           locale={locale}
@@ -236,6 +238,7 @@ function TimeRangePanel({
 }
 
 interface TimeRangeControlProps {
+  dailyOnly?: boolean;
   value: UsageTimeRange;
   customRange?: UsageCustomRange;
   onChange: (value: UsageTimeRange, customRange?: UsageCustomRange) => void;
@@ -246,6 +249,7 @@ interface TimeRangeControlProps {
 }
 
 export function TimeRangeControl({
+  dailyOnly = false,
   value,
   customRange,
   onChange,
@@ -536,7 +540,7 @@ export function TimeRangeControl({
   };
 
   const panel = (
-    <TimeRangePanel
+    <TimeRangePanel dailyOnly={dailyOnly}
       mode={panelMode}
       rollingValues={displayedRollingValues}
       customRange={customDraft}

@@ -1,7 +1,7 @@
 import type { ModelPricingConfig } from '@/lib/types';
 export interface Tokens { input: number; output: number; cache_read: number; cache_write: number }
 export interface Aggregate { key: string; tokens: Tokens; total_tokens: number; known_cost: number; complete: boolean }
-export interface Overview { total: Aggregate; days: Aggregate[]; models: Aggregate[]; devices: Aggregate[]; agents: string[]; collected_at: string; snapshots: number }
+export interface Overview { breakdown: { day: string; models: Aggregate[]; devices: Aggregate[] }[]; total: Aggregate; days: Aggregate[]; models: Aggregate[]; devices: Aggregate[]; agents: string[]; collected_at: string; snapshots: number }
 export interface Device { id: string; name: string; revoked: boolean; last_seen: string | null }
 export interface Filters { device: string; agent: string; start: string; end: string }
 // One in-memory credential per mounted application. No ambient cookie/session

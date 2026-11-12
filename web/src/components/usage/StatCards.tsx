@@ -35,6 +35,7 @@ interface StatCardData {
 }
 
 export interface StatCardsProps {
+  aggregateMode?: boolean;
   usage: UsageOverviewPayload | null;
   loading: boolean;
   dailyAverageUsage: UsageOverviewPayload | null;
@@ -119,6 +120,7 @@ export function StatCards({
   loading,
   dailyAverageUsage,
   reserveDailyAverage,
+  aggregateMode = false,
   sparklines,
 }: StatCardsProps) {
   const { t } = useTranslation();
@@ -181,10 +183,10 @@ export function StatCards({
             {t('usage_stats.cache_creation_tokens')}:{' '}
             {loading ? '-' : formatCompactNumber(tokenBreakdown.cacheCreationTokens)}
           </span>
-          <span className={styles.statMetaItem}>
+          {!aggregateMode && <span className={styles.statMetaItem}>
             {t('usage_stats.reasoning_tokens')}:{' '}
             {loading ? '-' : formatCompactNumber(tokenBreakdown.reasoningTokens)}
-          </span>
+          </span>}
         </>
       ),
       trend: sparklines.tokens,
@@ -250,7 +252,7 @@ export function StatCards({
       accent: '#f59e0b',
       accentSoft: 'rgba(245, 158, 11, 0.18)',
       accentBorder: 'rgba(245, 158, 11, 0.32)',
-      value: loading ? '-' : formatUsd(totalCost),
+      value: loading ? '-' : aggregateMode && !costAvailable ? `Known ${formatUsd(totalCost)}` : formatUsd(totalCost),
       meta: (
         <>
           <span className={styles.statMetaItem}>
@@ -268,8 +270,8 @@ export function StatCards({
     },
   ];
 
-  const primaryCards = statsCards.slice(0, 2);
-  const secondaryCards = statsCards.slice(2);
+  const primaryCards = aggregateMode ? statsCards.filter(card => ['tokens', 'cache-read-rate', 'cost'].includes(card.key)) : statsCards.slice(0, 2);
+  const secondaryCards = aggregateMode ? [] : statsCards.slice(2);
   const renderStatCard = (card: StatCardData) => (
     <div
       key={card.key}
@@ -290,7 +292,7 @@ export function StatCards({
       </div>
       <div className={styles.statValue}>{card.value}</div>
       {card.meta && <div className={styles.statMetaRow}>{card.meta}</div>}
-      <div className={styles.statTrend}>
+      {(!aggregateMode || card.trend) && <div className={styles.statTrend}>
         {card.trend ? (
           <Line
             className={styles.sparkline}
@@ -300,7 +302,7 @@ export function StatCards({
         ) : (
           <div className={styles.statTrendPlaceholder}></div>
         )}
-      </div>
+      </div>}
     </div>
   );
 
@@ -310,7 +312,7 @@ export function StatCards({
         className={`${styles.primaryStatsRow} ${dailyAverageExpanded ? styles.primaryStatsRowExpanded : ''}`.trim()}
       >
         <div className={styles.dailyAverageSlot} aria-hidden={!dailyAverageExpanded}>
-          <DailyAverageCard usage={dailyAverageUsage} loading={loading} />
+          <DailyAverageCard aggregateMode={aggregateMode} usage={dailyAverageUsage} loading={loading} />
         </div>
         {primaryCards.map((card) => (
           <div key={card.key} className={styles.primaryStatSlot}>

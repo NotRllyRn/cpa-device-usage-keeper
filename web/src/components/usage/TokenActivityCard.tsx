@@ -23,12 +23,13 @@ export function calculateTokenActivityLevels(values: readonly number[]): number[
 }
 
 export interface TokenActivityCardProps {
+  aggregateMode?: boolean;
   activity: UsageActivityResponse | null;
   loading: boolean;
   requestIdentity: string;
 }
 
-export function TokenActivityCard({ activity, loading, requestIdentity }: TokenActivityCardProps) {
+export function TokenActivityCard({ activity, loading, requestIdentity, aggregateMode = false }: TokenActivityCardProps) {
   const { t, i18n } = useTranslation();
   const blocks = useMemo(() => activity?.blocks ?? [], [activity]);
   const levels = useMemo(() => calculateTokenActivityLevels(blocks.map((block) => block.total_tokens)), [blocks]);
@@ -44,7 +45,7 @@ export function TokenActivityCard({ activity, loading, requestIdentity }: TokenA
     `${t('usage_stats.token_activity_total')} ${numberFormatter.format(block.total_tokens)}`,
     `${t('usage_stats.token_activity_input')} ${numberFormatter.format(block.input_tokens)}`,
     `${t('usage_stats.token_activity_output')} ${numberFormatter.format(block.output_tokens)}`,
-    `${t('usage_stats.token_activity_reasoning')} ${numberFormatter.format(block.reasoning_tokens)}`,
+    ...(!aggregateMode ? [`${t('usage_stats.token_activity_reasoning')} ${numberFormatter.format(block.reasoning_tokens)}`] : []),
     `${t('usage_stats.token_activity_cache_read')} ${numberFormatter.format(block.cache_read_tokens)}`,
     `${t('usage_stats.token_activity_cache_creation')} ${numberFormatter.format(block.cache_creation_tokens)}`,
   ].join(', ');
@@ -82,7 +83,7 @@ export function TokenActivityCard({ activity, loading, requestIdentity }: TokenA
               <span>{t('usage_stats.token_activity_total')} <strong>{formatCompactNumber(block.total_tokens)}</strong></span>
               <span>{t('usage_stats.token_activity_input')} <strong>{formatCompactNumber(block.input_tokens)}</strong></span>
               <span>{t('usage_stats.token_activity_output')} <strong>{formatCompactNumber(block.output_tokens)}</strong></span>
-              <span>{t('usage_stats.token_activity_reasoning')} <strong>{formatCompactNumber(block.reasoning_tokens)}</strong></span>
+              {!aggregateMode && <span>{t('usage_stats.token_activity_reasoning')} <strong>{formatCompactNumber(block.reasoning_tokens)}</strong></span>}
               <span>{t('usage_stats.token_activity_cache_read')} <strong>{formatCompactNumber(block.cache_read_tokens)}</strong></span>
               <span>{t('usage_stats.token_activity_cache_creation')} <strong>{formatCompactNumber(block.cache_creation_tokens)}</strong></span>
             </span>

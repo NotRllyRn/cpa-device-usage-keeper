@@ -18,6 +18,7 @@ type CustomEndpoint = 'start' | 'end';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface CustomRangePanelProps {
+  dailyOnly?: boolean;
   value: UsageCustomRange;
   timeZone: string;
   locale?: string;
@@ -85,6 +86,7 @@ const buildCalendarCells = (visibleMonth: string): CalendarCell[] => {
 };
 
 function CustomRangeSummary({
+  dailyOnly = false,
   value,
   timeZone,
   locale,
@@ -95,6 +97,7 @@ function CustomRangeSummary({
   onApply,
   onCancel,
 }: {
+  dailyOnly?: boolean;
   value: UsageCustomRange;
   timeZone: string;
   locale?: string;
@@ -109,7 +112,7 @@ function CustomRangeSummary({
   return (
     <div className={styles.customSummary} data-custom-range-summary>
       <div className={styles.customUnitSelector} role="group" aria-label={t('usage_stats.range_custom_unit')}>
-        {(['hour', 'day'] as const).map((unit) => (
+        {(['hour', 'day'] as const).filter(unit => !dailyOnly || unit === 'day').map((unit) => (
           <button
             key={unit}
             type="button"
@@ -160,7 +163,7 @@ function CustomRangeSummary({
   );
 }
 
-export function CustomRangePanel({ value, timeZone, locale, anchorMs, maxDayRangeDays, onChange, onApply, onCancel }: CustomRangePanelProps) {
+export function CustomRangePanel({ dailyOnly = false, value, timeZone, locale, anchorMs, maxDayRangeDays, onChange, onApply, onCancel }: CustomRangePanelProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<CustomPickerView>('summary');
   const [activeEndpoint, setActiveEndpoint] = useState<CustomEndpoint>('start');
@@ -257,7 +260,7 @@ export function CustomRangePanel({ value, timeZone, locale, anchorMs, maxDayRang
 
   if (view === 'summary') {
     return (
-      <CustomRangeSummary
+      <CustomRangeSummary dailyOnly={dailyOnly}
         value={value}
         timeZone={timeZone}
         locale={locale}

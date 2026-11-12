@@ -18,6 +18,11 @@ interface SyncDraft {
 }
 
 interface CompletePricingSyncModalProps {
+  transport?: {
+    fetch: typeof fetchPricingSync
+    apply: typeof applyPricingSync
+    models: typeof fetchPricingModels
+  }
   open: boolean
   models: ModelPricingConfig[]
   locked?: boolean
@@ -49,7 +54,7 @@ const samePrices = (left: PricingBasePrices, right: PricingBasePrices): boolean 
   priceKeys.every((key) => left[key] === right[key])
 
 // 新同步只编辑本次四项基础价；来源草稿与应用状态均只存在当前弹窗中。
-export function CompletePricingSyncModal({ open, models, locked = false, onClose, onRefreshPricing, onNotice, onAuthRequired, onPricingBusy }: CompletePricingSyncModalProps) {
+export function CompletePricingSyncModal({ open, models, transport, locked = false, onClose, onRefreshPricing, onNotice, onAuthRequired, onPricingBusy }: CompletePricingSyncModalProps) {
   const { t } = useTranslation()
   const [source, setSource] = useState<PricingSyncSource>(readPricingSyncSource)
   const [preview, setPreview] = useState<PricingSyncFetchResponse | null>(null)
@@ -125,7 +130,7 @@ export function CompletePricingSyncModal({ open, models, locked = false, onClose
     fetchRef.current = controller
     setFetching(true)
     try {
-      const response = await fetchPricingSync(source, controller.signal)
+      const response = await (transport?.fetch ?? fetchPricingSync)(source, controller.signal)
       if (fetchRef.current !== controller || controller.signal.aborted || response.source !== source) return
       setPreview(response)
       setDrafts(response.matches.map(asDraft))
@@ -178,7 +183,7 @@ export function CompletePricingSyncModal({ open, models, locked = false, onClose
     setApplyError('')
     setFieldErrors({})
     try {
-      await applyPricingSync({ source, items })
+      await (transport?.apply ?? applyPricingSync)({ source, items })
       const refreshed = await onRefreshPricing()
       onNotice(refreshed ? t('usage_stats.pricing_settings_sync_applied', { count: items.length })
         : t('usage_stats.pricing_settings_saved_refresh_failed'))
@@ -204,7 +209,7 @@ export function CompletePricingSyncModal({ open, models, locked = false, onClose
         return
       }
       try {
-        const current = await fetchPricingModels()
+        const current = await (transport?.models ?? fetchPricingModels)()
         const matches = items.every((item) => {
           const saved = current.models.find((model) => model.model === item.model)
           return saved && samePrices(saved.base_prices, item.base_prices)

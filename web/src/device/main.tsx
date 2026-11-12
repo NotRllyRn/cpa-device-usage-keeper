@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, type CSSProperties } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
@@ -7,11 +7,16 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardToolbar } from '@/components/dashboard/DashboardToolbar';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { PriceCatalog } from './PriceCatalog';
+import { CompletePricingSyncModal } from '@/components/usage/pricing/CompletePricingSyncModal';
 import { PricingSettings } from '@/components/usage/pricing/PricingSettings';
 import type { UseModelPricingDataReturn } from '@/components/usage/hooks/useModelPricingData';
 import type { ModelPricingConfig } from '@/lib/types';
-import { Line, Bar } from '@/components/usage/charts/UsageChart';
+import { UsageComparisonCharts } from '@/components/usage/UsageComparisonCharts';
+import { TokenActivityCard } from '@/components/usage/TokenActivityCard';
+import { StatCards } from '@/components/usage/StatCards';
+import { TimeRangeControl } from '@/components/usage/TimeRangeControl';
+import type { UsageTimeRange, UsageCustomRange } from '@/lib/types';
+import { dashboardData, rangeDates } from './dashboard';
 import '@/lib/chartjs';
 import { DeviceAPI, type Overview, type Device, type Filters } from './api';
 import '@/index.css';
@@ -25,7 +30,7 @@ import '@/styles/global.scss';
 import styles from '@/pages/UsagePage.module.scss';
 import './device.scss';
 
-const emptyFilters: Filters = { device: '', agent: '', start: '', end: '' };
+const emptyFilters: Filters = { device: '', agent: '', ...rangeDates('7d') };
 const message = (e: unknown) => e instanceof Error ? e.message : 'Request failed';
 const number = (n: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 const money = (n: number) => '$' + n.toFixed(6);
@@ -34,13 +39,10 @@ const tabs: { id: Tab; label: string; href: string }[] = [
   { id: 'overview', label: 'Overview', href: '#overview' }, { id: 'history', label: 'Daily history', href: '#history' },
   { id: 'devices', label: 'Devices', href: '#devices' }, { id: 'settings', label: 'Settings', href: '#settings' },
 ];
-function Card({ title, value, note }: { title: string; value: string; note: string }) {
-  return <div className={styles.statCard} style={{ '--accent': '#6c7cff', '--accent-soft': '#6c7cff20', '--accent-border': '#6c7cff40' } as CSSProperties}>
-    <div className={styles.statCardHeader}><span className={styles.statLabel}>{title}</span></div>
-    <div className={styles.statValue}>{value}</div><div className={styles.statMetaRow}>{note}</div><div className={styles.statTrendPlaceholder} />
-  </div>;
-}
 function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) {
+  const isDark = useThemeStore(s => s.resolvedTheme === 'dark');
+  const [range, setRange] = useState<UsageTimeRange>('7d');
+  const [customRange, setCustomRange] = useState<UsageCustomRange>();
   const [syncPrices, setSyncPrices] = useState(false);
   const [manualModel, setManualModel] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
@@ -86,7 +88,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
     saveModel: async config => ({ result: { model: config.model, config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models', 'PUT', config)) }),
     deleteModel: async model => ({ result: { config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models?model=' + encodeURIComponent(model), 'DELETE')) }),
   };
-  const total = overview?.total;
+  const dashboard = overview ? dashboardData(overview, devices, filters.start, filters.end) : null;
   const filter = (key: keyof Filters, value: string) => setFilters(old => ({ ...old, [key]: value }));
   return <div className={`${styles.pageShell} ${styles.standalone}`} data-keeper-page="usage"><div className={styles.pageFrame}>
     <DashboardHeader identity="Device Usage Keeper" onLogout={onLogout} />
@@ -96,21 +98,13 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       <DashboardToolbar items={tabs} activeId={tab} onNavigate={setTab} onRefresh={() => void refresh()} refreshing={busy} filters={[
         <Select key="device" value={filters.device} options={[{ value: '', label: 'All devices' }, ...devices.map(d => ({ value: d.id, label: d.name + (d.revoked ? ' (revoked)' : '') }))]} onChange={v => filter('device', v)} ariaLabel="Device" />,
         <Select key="agent" value={filters.agent} options={[{ value: '', label: 'All agents' }, ...[...new Set([...(overview?.agents ?? []), filters.agent].filter(Boolean))].map(a => ({ value: a, label: a }))]} onChange={v => filter('agent', v)} ariaLabel="Agent" />,
-        <label key="start" className="device-date">From <input type="date" value={filters.start} onChange={e => filter('start', e.target.value)} /></label>,
-        <label key="end" className="device-date">Through <input type="date" value={filters.end} onChange={e => filter('end', e.target.value)} /></label>,
+        <TimeRangeControl key="range" dailyOnly value={range} customRange={customRange} timeZone="UTC" ariaLabel="Time range" onChange={(value, custom) => { setRange(value); setCustomRange(custom); setFilters(old => ({ ...old, ...rangeDates(value, custom) })); }} />,
       ]} />
       <p className="device-note">{busy ? 'Loading complete range…' : overview ? `${overview.snapshots} daily snapshots · Latest collection ${new Date(overview.collected_at).toLocaleString()} · Refresh to include new uploads.` : 'No data loaded'}</p>
       {tab === 'overview' && <>
-        <div className={styles.secondaryStatsGrid}>
-          <Card title="Total tokens" value={total ? number(total.total_tokens) : '—'} note="All retained data in selected range" />
-          <Card title="Estimated cost" value={total ? (!total.complete && total.known_cost === 0 ? 'Unknown' : money(total.known_cost)) : '—'} note={total?.complete ? 'Complete at current model rates' : 'Incomplete — known subtotal only; missing allocations/prices are unknown'} />
-          <Card title="Requests / success rate" value="Unavailable" note="Daily device aggregates do not contain request outcomes" />
-          <Card title="Latency / TTFT / TPS" value="Unavailable" note="No reliable request timing; no inferred performance" />
-        </div>
-        {overview && <div className="device-charts">
-          <section className={styles.statCard}><h2>Daily tokens</h2><div className="device-chart"><Line options={{ responsive: true, maintainAspectRatio: false }} data={{ labels: overview.days.map(d => d.key), datasets: [{ label: 'Tokens (UTC)', data: overview.days.map(d => d.total_tokens), borderColor: '#6576ff', backgroundColor: '#6576ff30', fill: true, tension: 0.2 }] }} /></div></section>
-          <section className={styles.statCard}><h2>Device tokens</h2><div className="device-chart"><Bar options={{ responsive: true, maintainAspectRatio: false }} data={{ labels: overview.devices.map(d => devices.find(v => v.id === d.key)?.name ?? d.key), datasets: [{ label: 'Tokens', data: overview.devices.map(d => d.total_tokens), backgroundColor: '#6576ff' }] }} /></div></section>
-        </div>}
+        <StatCards aggregateMode usage={dashboard?.usage ?? null} dailyAverageUsage={dashboard?.usage ?? null} reserveDailyAverage loading={busy} sparklines={{ requests: null, tokens: null, rpm: null, tpm: null, cacheReadRate: null, cost: null }} />
+        <TokenActivityCard aggregateMode activity={dashboard?.activity ?? null} loading={busy} requestIdentity={JSON.stringify(filters)} />
+        <UsageComparisonCharts aggregateMode comparisons={dashboard?.comparisons} deviceComparisons={dashboard?.devices} loading={busy} isDark={isDark} />
         <section className={styles.statCard}><h2>Models</h2><div className="device-table"><table><thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.models.map(m => <tr key={m.key}><td>{m.key}</td><td>{number(m.tokens.input)}</td><td>{number(m.tokens.output)}</td><td>{number(m.tokens.cache_read)} / {number(m.tokens.cache_write)}</td><td>{m.complete ? money(m.known_cost) : `Unknown (known ${money(m.known_cost)})`}</td></tr>)}</tbody></table></div><p className="device-note">Unattributed or extra tokens remain in daily totals and are not assigned a fabricated model or cost.</p></section>
       </>}
       {tab === 'history' && <section className={styles.statCard}><h2>Daily history</h2><div className="device-table"><table><thead><tr><th>UTC day</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.days.map(d => <tr key={d.key}><td>{d.key}</td><td>{number(d.total_tokens)}</td><td>{number(d.tokens.input)}</td><td>{number(d.tokens.output)}</td><td>{number(d.tokens.cache_read)} / {number(d.tokens.cache_write)}</td><td>{d.complete ? money(d.known_cost) : `Incomplete: ${money(d.known_cost)}`}</td></tr>)}</tbody></table></div></section>}
@@ -118,7 +112,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
         {enrollment && <div role="status"><p>Upload token (shown only here; enter privately into the installer):</p><output className="device-token">{enrollment}</output><Button onClick={() => setEnrollment('')}>Dismiss token</Button></div>}
         <div className="device-table"><table><thead><tr><th>Device</th><th>Last upload received</th><th>Status</th><th>Action</th></tr></thead><tbody>{devices.map(d => <tr key={d.id}><td>{d.name}</td><td>{d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'}</td><td>{d.revoked ? 'Revoked' : 'Active'}</td><td><Button disabled={d.revoked || busy} variant="danger" onClick={() => { if (confirm('Revoke uploads for ' + d.name + '? History is retained.')) void mutate(() => api.request('/devices/' + d.id, 'DELETE')).catch(e => setError(message(e))); }}>Revoke</Button></td></tr>)}</tbody></table></div><p className="device-note">Copied histories across devices overlap. Filter old/replacement devices rather than summing both. Enrollment is capped at 1,000, including revoked devices.</p></section>}
       {tab === 'settings' && <><p className="device-note">Keeper Model Pricing Settings. Use Add for uploaded models, or Sync Prices to select and review source rates. Saving immediately refreshes historical estimates and the model breakdown. Recalculate Costs is unnecessary: aggregate costs are recalculated on every read. Request-dependent rules produce unknown daily costs.</p><label>Additional model identifier <input value={manualModel} onChange={e => setManualModel(e.target.value)} /></label><Button disabled={!manualModel.trim()} onClick={() => { setModelOptions(old => [...new Set([...old, manualModel.trim()])].sort()); setManualModel(''); }}>Add to model choices</Button><p>{modelOptions.length} model choices · {prices.length} configured. Add is unavailable only while loading or when all choices already have settings; use Edit for those models.</p><PricingSettings pricing={pricing} aggregateMode onSyncPrices={() => setSyncPrices(true)} timezone="UTC" /></>}
-      {syncPrices && <PriceCatalog api={api} models={modelOptions} onClose={() => setSyncPrices(false)} onSave={pricing.saveModel} />}
+      <CompletePricingSyncModal open={syncPrices} models={prices} onClose={() => setSyncPrices(false)} onRefreshPricing={refresh} onNotice={setError} transport={{ fetch: source => api.request('/pricing/sync?source=' + source), apply: input => api.request('/pricing/sync/apply', 'POST', input), models: async () => ({ models: await api.prices(), config_revision: 0 }) }} />
       <p className="device-note">Unavailable for device aggregates: realtime traffic, request events, credentials, quotas, success rates, request speed and latency.</p>
     </div></main>
   </div></div>;

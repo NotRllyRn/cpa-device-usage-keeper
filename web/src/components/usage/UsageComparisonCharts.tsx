@@ -27,17 +27,20 @@ interface ChartProps {
   comparisons?: UsageOverviewComparisons;
   loading: boolean;
   keyViewer?: boolean;
+  aggregateMode?: boolean;
+  deviceComparisons?: UsageComparisonItem[];
   isDark?: boolean;
   isMobile?: boolean;
 }
 
 // 主页面与 Key Viewer 共用单卡片，维度边界仍由服务端权限和这里的可选项共同限制。
-export function UsageComparisonCharts({ comparisons, loading, keyViewer = false, isDark = false, isMobile = false }: ChartProps) {
+export function UsageComparisonCharts({ comparisons, loading, keyViewer = false, isDark = false, isMobile = false, aggregateMode = false, deviceComparisons }: ChartProps) {
   const { t } = useTranslation();
   const headingId = useId();
   const [selected, setSelected] = useState<UsageDimension>('models');
   const dimension = keyViewer && (selected === 'credentials' || selected === 'ai_providers') ? 'models' : selected;
-  const dimensions = keyViewer ? DIMENSIONS.slice(0, 2) : DIMENSIONS;
+  const dimensions = aggregateMode ? DIMENSIONS.slice(0, deviceComparisons ? 2 : 1) : keyViewer ? DIMENSIONS.slice(0, 2) : DIMENSIONS;
+  if (aggregateMode && deviceComparisons) comparisons = { ...comparisons, models: comparisons?.models ?? [], api_keys: deviceComparisons };
   const items = comparisons?.[dimension] ?? EMPTY;
   const total = items.reduce((sum, item) => sum + item.total_tokens, 0);
   return <section className={usageStyles.recentActivitySection} aria-labelledby={headingId}>
@@ -49,19 +52,19 @@ export function UsageComparisonCharts({ comparisons, loading, keyViewer = false,
         <div className={`${usageStyles.recentActivityWindowSwitcher} ${styles.dimensions}`} role="group" aria-label={t('usage_stats.comparison_title')}>
           {dimensions.map(key => <button key={key} type="button" data-dimension={key} aria-pressed={dimension === key}
             className={`${usageStyles.recentActivityWindowButton} ${dimension === key ? usageStyles.recentActivityWindowButtonActive : ''}`}
-            onClick={() => setSelected(key)}>{t(`usage_stats.overview_realtime_dimension_${key}`)}</button>)}
+            onClick={() => setSelected(key)}>{aggregateMode && key === 'api_keys' ? 'Devices' : t(`usage_stats.overview_realtime_dimension_${key}`)}</button>)}
         </div>
       </div>
     </div>
     <Card title={t('usage_stats.comparison_token_trend')} className={styles.card} extra={
       <span className={styles.total} data-comparison-total><strong>{items.length || !loading ? formatCompactNumber(total) : '—'}</strong><span>{t('usage_stats.comparison_tokens')}</span></span>
     }>
-      <ComparisonArea key={dimension} dimension={dimension} comparisons={comparisons} loading={loading} isDark={isDark} isMobile={isMobile} />
+      <ComparisonArea aggregateMode={aggregateMode} key={dimension} dimension={dimension} comparisons={comparisons} loading={loading} isDark={isDark} isMobile={isMobile} />
     </Card>
   </section>;
 }
 
-function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile }: ChartProps & {dimension: UsageDimension}) {
+function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, aggregateMode }:  ChartProps & {dimension: UsageDimension}) {
   const { t, i18n } = useTranslation();
   const items = comparisons?.[dimension] ?? EMPTY;
   const buckets = comparisons?.buckets ?? EMPTY_BUCKETS;
@@ -154,10 +157,10 @@ function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile }: C
   const metricLines = (row: ComparisonRow) => [
     row.label,
     `${t('usage_stats.comparison_tokens')}: ${formatCompactNumber(row.total_tokens)} · ${formatShare(row.share)}`,
-    `${t('usage_stats.comparison_requests')}: ${row.requests.toLocaleString()} · ${t('usage_stats.comparison_failures')}: ${row.failures.toLocaleString()}`,
+    ...(!aggregateMode ? [`${t('usage_stats.comparison_requests')}: ${row.requests.toLocaleString()} · ${t('usage_stats.comparison_failures')}: ${row.failures.toLocaleString()}`] : []),
     `${t('usage_stats.comparison_input')}: ${formatCompactNumber(row.input_tokens)} · ${t('usage_stats.comparison_output')}: ${formatCompactNumber(row.output_tokens)}`,
     `${t('usage_stats.comparison_cache_read')}: ${formatCompactNumber(row.cache_read_tokens)} · ${t('usage_stats.comparison_cache_write')}: ${formatCompactNumber(row.cache_creation_tokens)}`,
-    `${t('usage_stats.comparison_reasoning')}: ${formatCompactNumber(row.reasoning_tokens)}`,
+    ...(!aggregateMode ? [`${t('usage_stats.comparison_reasoning')}: ${formatCompactNumber(row.reasoning_tokens)}`] : []),
     `${t('usage_stats.comparison_cache')}: ${formatShare(row.input_tokens > 0 ? row.cache_read_tokens / row.input_tokens * 100 : null)}`,
     `${t('usage_stats.comparison_cost')}: ${formatCost(row.cost)}`,
   ];
@@ -184,7 +187,7 @@ function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile }: C
   return <div data-comparison={dimension} aria-busy={loading}>
     <div className={styles.chart}>
       {view.total > 0 && buckets.length > 0 ? <Line ref={chartRef} data={data} options={options} datasetIdKey="key" role="img"
-        aria-label={`${t('usage_stats.comparison_token_trend')} · ${t(`usage_stats.overview_realtime_dimension_${dimension}`)} · ${t('usage_stats.comparison_chart_keyboard')}`}
+        aria-label={`${t('usage_stats.comparison_token_trend')} · ${(aggregateMode && dimension === 'api_keys' ? 'Devices' : t(`usage_stats.overview_realtime_dimension_${dimension}`))} · ${t('usage_stats.comparison_chart_keyboard')}`}
         tabIndex={0} onFocus={() => selectBucket(buckets.length - 1)} onKeyDown={onChartKeyDown}
         onBlur={() => { if (tooltipRef.current) tooltipRef.current.hidden = true; }} /> : <div className={styles.empty}>{empty}</div>}
       <div ref={tooltipRef} className={styles.tooltip} role="tooltip" hidden style={{ backgroundColor: theme.tooltipBg, color: theme.tooltipBody, borderColor: theme.tooltipBorder, padding: buildUsageChartTooltipStyle(theme).padding }} />

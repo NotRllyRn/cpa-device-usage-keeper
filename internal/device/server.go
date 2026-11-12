@@ -4,6 +4,8 @@ import (
 	"context"
 	"cpa-usage-keeper/internal/pricing"
 	"cpa-usage-keeper/internal/pricingmetadata"
+	"cpa-usage-keeper/internal/service"
+	servicedto "cpa-usage-keeper/internal/service/dto"
 	"cpa-usage-keeper/web"
 	"crypto/subtle"
 	"encoding/json"
@@ -234,7 +236,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonReply(w, 200, overview)
-	case r.Method == "GET" && r.URL.Path == "/v1/pricing/catalog":
+	case r.Method == "POST" && r.URL.Path == "/v1/pricing/sync/apply":
+		var input servicedto.PricingSyncApplyRequest
+		if !decode(w, r, &input) {
+			return
+		}
+		models, err := s.store.ApplyBasePrices(r.Context(), input)
+		if err != nil {
+			fail(w, 400, "invalid pricing sync")
+			return
+		}
+		jsonReply(w, 200, servicedto.PricingSyncApplyResponse{Models: models})
+	case r.Method == "GET" && r.URL.Path == "/v1/pricing/sync":
 		source := r.URL.Query().Get("source")
 		if _, err := pricingmetadata.SourceByID(source); err != nil {
 			fail(w, 400, "unsupported pricing source")
@@ -245,7 +258,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(w, 502, "pricing source unavailable")
 			return
 		}
-		jsonReply(w, 200, catalog)
+		overview, err := s.store.Overview(r.Context(), "", "", "", "")
+		if err != nil {
+			fail(w, 503, "model list unavailable")
+			return
+		}
+		prices, err := s.store.Prices()
+		if err != nil {
+			fail(w, 503, "pricing unavailable")
+			return
+		}
+		models := []string{}
+		for _, model := range overview.Models {
+			models = append(models, model.Key)
+		}
+		for _, model := range prices {
+			models = append(models, model.Model)
+		}
+		if len(models) > 10000 {
+			fail(w, 400, "too many models")
+			return
+		}
+		jsonReply(w, 200, service.MatchCompletePricingCatalog(models, catalog))
 	case r.Method == "GET" && r.URL.Path == "/v1/pricing/models":
 		prices, err := s.store.Prices()
 		if err != nil {

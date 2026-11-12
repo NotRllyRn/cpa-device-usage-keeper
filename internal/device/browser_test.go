@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 // Optional local integration: requires prebuilt device UI and a Playwright
@@ -24,10 +25,17 @@ func TestBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.store.Apply(token, sample()); err != nil {
+	snapshot := sample()
+	snapshot.Day = time.Now().UTC().Format("2006-01-02")
+	snapshot.CollectedAt = time.Now().UTC()
+	if _, err = s.store.Apply(token, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("node", "../../scripts/test-browser.mjs")
+	script := "../../scripts/test-browser.mjs"
+	if os.Getenv("DEVICE_COMPARE_UI") != "" {
+		script = "../../scripts/compare-device-ui.mjs"
+	}
+	cmd := exec.Command("node", script)
 	cmd.Env = append(os.Environ(), "DEVICE_TEST_URL=http://"+s.Address(), "DEVICE_TEST_TOKEN="+s.admin, "DEVICE_TEST_PLAYWRIGHT="+module)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("browser: %v\n%s", err, output)

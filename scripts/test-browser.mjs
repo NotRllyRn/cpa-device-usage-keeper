@@ -11,7 +11,7 @@ try {
   await page.getByLabel('Admin token').fill(process.env.DEVICE_TEST_TOKEN);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await page.getByText('130', { exact: true }).first().waitFor();
-  assert.match(await page.locator('body').innerText(), /Incomplete/);
+  assert.match(await page.locator('body').innerText(), /Known/);
   assert.match(await page.locator('body').innerText(), /Unavailable/);
   // Keeper toolbar starts collapsed. Open its page selector to navigate.
   async function navigate(label) {
@@ -35,15 +35,15 @@ try {
   await page.getByText('$0.000130',{exact:true}).first().waitFor();
   await navigate('Settings');
   await page.getByRole('button',{name:/Sync Prices/i}).click();
-  await page.getByRole('dialog',{name:'Sync Prices — select and review'}).waitFor();
-  await page.route('**/v1/pricing/catalog?*', route => route.fulfill({json:{Source:{Name:'Synthetic test',URL:'https://example.com'},Entries:[{ProviderID:'test',Model:{id:'model-test',cost:{input:2,output:2,cache_read:null,cache_write:null}}}]}}));
-  await page.getByRole('button',{name:'Fetch prices',exact:true}).click();
-  await page.getByRole('button',{name:'Select',exact:true}).click();
-  await page.getByRole('alert').filter({hasText:'missing rates'}).waitFor();
-  await page.getByLabel('Missing cache-read rate').fill('2');
-  await page.getByLabel('Missing cache-write rate').fill('0');
-  await page.getByRole('button',{name:'Select',exact:true}).click();
-  await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();
+  await page.getByRole('dialog',{name:'Sync Prices',exact:true}).waitFor();
+  await page.route('**/v1/pricing/sync?*', route => route.fulfill({json:{source:'models-dev',matches:[{model:'model-test',matched_model:'model-test',provider:'Synthetic',pricing_style:'openai',base_prices:{input:2,output:2,cache_read:2,cache_write:0}}],unmatched_models:[]}}));
+  await page.getByRole('button',{name:'Fetch',exact:true}).click();
+  const row = page.locator('[data-sync-model="model-test"]');
+  await row.waitFor();
+  await row.getByRole('checkbox').uncheck();
+  assert.equal(await page.getByRole('button',{name:/Apply selected prices/}).isDisabled(),true);
+  await row.getByRole('checkbox').check();
+  await page.getByRole('button',{name:/Apply selected prices/}).click();
   await page.getByRole('dialog').waitFor({state:'hidden'});
   await navigate('Overview');
   await page.getByText('$0.000260',{exact:true}).first().waitFor();

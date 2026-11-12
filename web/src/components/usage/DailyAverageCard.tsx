@@ -16,6 +16,7 @@ interface DailyAverageMetrics {
 interface DailyAverageCardProps {
   usage: UsageOverviewPayload | null;
   loading: boolean;
+  aggregateMode?: boolean;
 }
 
 interface DailyAverageMetricItem {
@@ -65,7 +66,7 @@ export function buildDailyAverageMetrics(usage: UsageOverviewPayload | null): Da
   };
 }
 
-export function DailyAverageCard({ usage, loading }: DailyAverageCardProps) {
+export function DailyAverageCard({ usage, loading, aggregateMode = false }: DailyAverageCardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => buildDailyAverageMetrics(usage), [usage]);
   const metricItems: DailyAverageMetricItem[] = [
@@ -86,7 +87,7 @@ export function DailyAverageCard({ usage, loading }: DailyAverageCardProps) {
     {
       key: 'cost',
       label: t('usage_stats.avg_cost'),
-      value: loading || !metrics ? '-' : formatUsd(metrics.cost),
+      value: loading || !metrics ? '-' : aggregateMode && !metrics.costAvailable ? 'Unknown' : formatUsd(metrics.cost),
       icon: <IconDollarSign size={14} />,
       accent: '#f59e0b',
       hint: metrics && !metrics.costAvailable ? t('usage_stats.cost_need_price') : undefined,
@@ -104,7 +105,7 @@ export function DailyAverageCard({ usage, loading }: DailyAverageCardProps) {
         )}
       </div>
       <div className={styles.dailyAverageMetrics}>
-        {metricItems.map((item) => (
+        {metricItems.filter(item => !aggregateMode || item.key !== 'requests').map((item) => (
           <div
             key={item.key}
             className={styles.dailyAverageMetric}
