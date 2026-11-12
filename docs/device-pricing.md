@@ -21,6 +21,13 @@ Catalog access is authenticated and limited to the two built-in upstream URLs.
 If a source fails, try the other source or enter verified rates manually. No
 collector costs or fabricated model aliases are used as price evidence.
 
+Pi reports keep their original `[pi] model` identifiers and remain included in
+all-device token totals regardless of pricing. For cost lookup, an exact configured
+identifier wins; otherwise only the known `[pi] ` prefix is removed and the remaining
+identifier is matched exactly. Thus `[pi] gpt-example` inherits `gpt-example` rates,
+including later edits, without copying settings. No fuzzy family/version matching
+is performed, and unmatched models remain unknown. Agent filtering stays separate.
+
 The overview shows model input/output/cache tokens and calculated cost; daily
 history gives the day breakdown. Incomplete totals are labeled. An incomplete
 zero subtotal is displayed as Unknown rather than misleadingly as free usage.

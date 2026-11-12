@@ -117,7 +117,7 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		a := Aggregate{Tokens: snapshot.Totals, Total: snapshot.TotalTokens, Complete: true}
 		var assigned int64
 		for _, m := range snapshot.Models {
-			e := estimate(m, prices[m.Name])
+			e := estimate(m, resolvePrice(m.Name, prices))
 			v := Aggregate{Key: m.Name, Tokens: m.Tokens, Total: m.Input + m.Output + m.CacheRead + m.CacheWrite, Complete: e.Cost != nil}
 			assigned += v.Total
 			if e.Cost != nil {

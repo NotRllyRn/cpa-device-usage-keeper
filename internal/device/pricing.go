@@ -3,6 +3,7 @@ package device
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"cpa-usage-keeper/internal/entities"
@@ -52,6 +53,18 @@ func (s *Store) DeletePrice(model string) error {
 type Estimate struct {
 	Cost   *float64 `json:"cost"`
 	Status string   `json:"status"`
+}
+
+// Exact overrides win. Only ccusage's known Pi display prefix is removed;
+// never guess a model family, provider, version, or tier.
+func resolvePrice(name string, prices map[string]*pricing.ModelPricingConfig) *pricing.ModelPricingConfig {
+	if p := prices[name]; p != nil {
+		return p
+	}
+	if strings.HasPrefix(name, "[pi] ") {
+		return prices[strings.TrimPrefix(name, "[pi] ")]
+	}
+	return nil
 }
 
 func estimate(m Model, p *pricing.ModelPricingConfig) Estimate {

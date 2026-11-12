@@ -327,7 +327,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, row := range rows {
 			p := pricedRecord{Record: row, Estimates: []Estimate{}}
 			for _, m := range row.Models {
-				p.Estimates = append(p.Estimates, estimate(m, byModel[m.Name]))
+				p.Estimates = append(p.Estimates, estimate(m, resolvePrice(m.Name, byModel)))
 			}
 			result = append(result, p)
 		}
