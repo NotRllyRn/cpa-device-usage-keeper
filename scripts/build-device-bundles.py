@@ -40,6 +40,7 @@ for (system, arch), (package, integrity) in artifacts.items():
     for name in ['install.sh','install-macos.sh','install.ps1','LICENSE']:
         shutil.copyfile(root / name, dest / name)
     (dest / 'BUILD.txt').write_text('Source: '+subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()+'\nTarget: '+system+'/'+arch+'\n')
+    (dest / 'RELEASE_VERSION').write_text(version+'\n')
     files = sorted(p for p in dest.iterdir() if p.is_file())
     (dest / 'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in files))
     archive = out / f'device-usage-{version}-{system}-{arch}.zip'
@@ -48,3 +49,6 @@ for (system, arch), (package, integrity) in artifacts.items():
             bundle.write(path, path.name)
     archive.with_suffix('.zip.sha256').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n')
     print('Built', archive)
+# Publish these entrypoints alongside archives only after release approval.
+for name in ['bootstrap.sh', 'bootstrap.ps1']:
+    shutil.copyfile(root / name, out / name)

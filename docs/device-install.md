@@ -20,20 +20,21 @@ Unix requires curl, Python 3 (safe ZIP validation), and Bash; Windows requires
 PowerShell and curl.exe. An interactive terminal is required. Obtain an upload
 token through admin enrollment; never use CPA credentials or put secrets in commands.
 
-**Unavailable until an approved release is published.** Replace `APPROVED_TAG`
-in both places with the same approved stable `vX.Y.Z` tag; there is no guessed
-version or development/latest fallback. Prefer downloading and inspecting scripts.
+**Unavailable until an approved release with bootstrap assets is published.**
+The bootstrap resolves GitHub's latest stable release once and pins downloads to
+that validated tag. Drafts, prereleases and development tags are rejected.
+Prefer downloading and inspecting scripts.
 
 ```sh
-curl -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://raw.githubusercontent.com/NotRllyRn/cpa-device-usage-keeper/APPROVED_TAG/bootstrap.sh | DEVICE_USAGE_VERSION=APPROVED_TAG sh
+curl -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://github.com/NotRllyRn/cpa-device-usage-keeper/releases/latest/download/bootstrap.sh | sh
 ```
 
 Windows (download, inspect, then run from an interactive PowerShell terminal):
 
 ```powershell
-curl.exe -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://raw.githubusercontent.com/NotRllyRn/cpa-device-usage-keeper/APPROVED_TAG/bootstrap.ps1 -o bootstrap.ps1
+curl.exe -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://github.com/NotRllyRn/cpa-device-usage-keeper/releases/latest/download/bootstrap.ps1 -o bootstrap.ps1
 # Inspect bootstrap.ps1 before running:
-.\bootstrap.ps1 -Version APPROVED_TAG
+.\bootstrap.ps1
 ```
 
 The bootstrap downloads `device-usage-vX.Y.Z-OS-ARCH.zip` and its `.zip.sha256`
@@ -42,6 +43,22 @@ non-regular or oversized archive entries before invoking the offline installer.
 Checksums detect corruption, **not independent authenticity**: these are not signatures.
 HTTPS redirects are restricted to HTTPS and downloads have size/time limits.
 Unix prompts use the terminal even when the bootstrap arrives through a pipe.
+An optional `DEVICE_USAGE_VERSION=vX.Y.Z` override (or PowerShell `-Version vX.Y.Z`)
+selects an explicit stable tag instead of querying latest.
+
+Existing installations show installed and available versions before any install
+changes. Different or unknown versions require explicit confirmation; declining
+leaves the installation unchanged. Older target versions are labeled a downgrade
+or version switch, never silently installed. Same-version runs show the existing
+action menu, without automatic reinstallation. Windows reports that in-place
+upgrade/switch is unsupported and makes no changes even if confirmed.
+
+Successful bundle installs record `~/.local/lib/device-usage-keeper/release-version`
+from the checksummed bundle's `RELEASE_VERSION`. Updates record it only after
+successful scheduling; ordinary update rollback retains the previous marker.
+Legacy installs without a marker are reported as unknown, not guessed from the
+CLI's development version string. Private config and upload state are not modified
+by version checks.
 
 `bash install.sh update`, `bash install.sh status`, and `bash install.sh uninstall`
 manage the same installation. Updates retain private state and restore the prior

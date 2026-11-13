@@ -28,7 +28,7 @@ if ($Mode -eq 'uninstall') {
   if ((Get-ScheduledTask -TaskName $task).State -eq 'Running') { throw 'Task did not stop; files retained' }
   Unregister-ScheduledTask -TaskName $task -Confirm:$false
  }
- Remove-Item $exe,(Join-Path $lib 'ccusage.exe') -ErrorAction SilentlyContinue
+ Remove-Item $exe,(Join-Path $lib 'ccusage.exe'),(Join-Path $lib 'release-version') -ErrorAction SilentlyContinue
  Write-Output 'Uninstalled; private state retained. Revoke the device in the dashboard.'; exit
 }
 if ($Mode -in @('install','repair') -and (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue)) { throw 'A task already exists. In-place replacement is unsupported; uninstall first (private state is retained), then repair.' }
@@ -43,6 +43,11 @@ foreach ($line in Get-Content (Join-Path $Bundle 'SHA256SUMS')) {
 }
 if ($Mode -eq 'install' -and ((Test-Path "$state\config.json") -or (Test-Path "$state\state.json"))) { throw 'Already configured; use repair after uninstalling the scheduler (state is retained)' }
 if ($Mode -eq 'update') { throw 'Windows in-place update is not yet validated. Preserve state and use a reviewed manual binary replacement with the scheduled task stopped.' }
+$releaseVersion = 'unknown'
+if (Test-Path (Join-Path $Bundle 'RELEASE_VERSION')) {
+ $releaseVersion = [IO.File]::ReadAllText((Join-Path $Bundle 'RELEASE_VERSION')).TrimEnd("`n")
+ if ($releaseVersion -cnotmatch '\Av[0-9]+\.[0-9]+\.[0-9]+\z') { throw 'Invalid bundle release version' }
+}
 New-Item -ItemType Directory -Force $bin,$lib,$state | Out-Null
 # Protected ACL: current account and SYSTEM only, inherited by state files.
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -73,5 +78,7 @@ try {
  $principal = New-ScheduledTaskPrincipal -UserId $sid.Value -LogonType Interactive -RunLevel Limited
  $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 15) -StartWhenAvailable
  Register-ScheduledTask -Force -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+ [IO.File]::WriteAllText((Join-Path $lib 'release-version.new'), "$releaseVersion`n")
+ Move-Item -Force (Join-Path $lib 'release-version.new') (Join-Path $lib 'release-version')
  Write-Output 'Installed for the current logged-in user, every 15 minutes. Run ~/.local/bin/device-sync.exe status.'
 } finally { Remove-Item -Recurse -Force $tmp }

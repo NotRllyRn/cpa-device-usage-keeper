@@ -27,7 +27,7 @@ case "$mode" in
     systemctl --user stop device-usage-keeper.service
     rm -f "$units/device-usage-keeper.timer" "$units/device-usage-keeper.service"
     systemctl --user daemon-reload
-    rm -f "$bin/device-sync" "$lib/ccusage"
+    rm -f "$bin/device-sync" "$lib/ccusage" "$lib/release-version"
     printf 'Removed binaries and scheduler. Private state retained for safe revisions and retry. Revoke this device in the dashboard.\n'
     exit 0 ;;
   install|update) ;;
@@ -76,6 +76,13 @@ curl --fail --silent --show-error --location --proto '=https' --proto-redir '=ht
 printf '%s  %s\n' "$DEVICE_USAGE_SHA256" "$tmp/device-sync" | sha256sum -c - >/dev/null
 curl --fail --silent --show-error --proto '=https' --max-time 120 --max-filesize 33554432 'https://registry.npmjs.org/@ccusage/ccusage-linux-x64/-/ccusage-linux-x64-20.0.43.tgz' -o "$tmp/collector.tgz"
 fi
+release_version=unknown
+if [[ -n "${DEVICE_USAGE_BUNDLE:-}" && -f "$bundle/RELEASE_VERSION" ]]; then
+  release_version="$(<"$bundle/RELEASE_VERSION")"
+  [[ "$release_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid bundle release version' >&2; exit 1; }
+elif [[ -z "${DEVICE_USAGE_BUNDLE:-}" ]]; then
+  release_version="$DEVICE_USAGE_VERSION"
+fi
 # SHA512 of the pinned official npm platform archive (not a version-string check).
 printf '%s  %s\n' '0b8e1afcb6b2f37dd29a3776615dd27aa1821820634d7bacf353c777de3d7cebfa6db830f714940dd9492332b5453e0c765a4e8bc5669a707275e331f5d9699e' "$tmp/collector.tgz" | sha512sum -c - >/dev/null
 tar -xOf "$tmp/collector.tgz" package/bin/ccusage > "$tmp/ccusage"
@@ -102,5 +109,7 @@ printf '%s\n' '[Unit]' 'Description=Upload coding-agent aggregate snapshots' '[S
 printf '%s\n' '[Unit]' 'Description=Collect device usage every 15 minutes' '[Timer]' 'OnBootSec=2min' 'OnUnitActiveSec=15min' 'RandomizedDelaySec=60' '[Install]' 'WantedBy=timers.target' > "$units/device-usage-keeper.timer"
 systemctl --user daemon-reload
 systemctl --user enable --now device-usage-keeper.timer
+printf '%s\n' "$release_version" > "$lib/release-version.new"
+mv "$lib/release-version.new" "$lib/release-version"
 updating=false
 printf 'Installed. Use device-sync status. Collection runs in the user session; lingering is optional and not changed by this installer.\n'

@@ -21,13 +21,18 @@ case "$mode" in
  cancel|'') exit 0 ;;
  sources) exec "$exe" sources ;;
  status) launchctl print "$domain/$label"; exec "$exe" status ;;
- uninstall) launchctl bootout "$domain/$label" 2>/dev/null || true; rm -f "$unit" "$exe" "$lib/ccusage"; echo 'Uninstalled; private state retained. Revoke device in dashboard.'; exit ;;
+ uninstall) launchctl bootout "$domain/$label" 2>/dev/null || true; rm -f "$unit" "$exe" "$lib/ccusage" "$lib/release-version"; echo 'Uninstalled; private state retained. Revoke device in dashboard.'; exit ;;
  install|update) ;;
  *) echo 'Usage: install.sh [install|update|sources|status|uninstall]' >&2; exit 1 ;;
 esac
 bundle="${DEVICE_USAGE_BUNDLE:?Set DEVICE_USAGE_BUNDLE to the trusted macOS bundle directory}"
 case "$(uname -m)" in arm64) arch=arm64 ;; x86_64) arch=amd64 ;; *) echo 'Unsupported architecture' >&2; exit 1 ;; esac
 (cd "$bundle" && shasum -a 256 -c SHA256SUMS >/dev/null)
+release_version=unknown
+if [[ -f "$bundle/RELEASE_VERSION" ]]; then
+ release_version="$(<"$bundle/RELEASE_VERSION")"
+ [[ "$release_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid bundle release version' >&2; exit 1; }
+fi
 if [[ "$mode" == install && ( -e "$state/config.json" || -e "$state/state.json" || -e "$exe" || -e "$lib/ccusage" || -e "$unit" ) ]]; then echo 'Existing or partial installation; use update for complete installs, otherwise restore a backup. Do not delete private state.' >&2; exit 1; fi
 if [[ "$mode" == update ]]; then
  for f in "$exe" "$lib/ccusage" "$unit" "$state/config.json" "$state/state.json"; do [[ -f "$f" ]] || { echo 'Incomplete installation; restore backup' >&2; exit 1; }; done
@@ -61,5 +66,7 @@ escaped="$(printf '%s' "$exe" | sed 's/\&/\&amp;/g;s/</\&lt;/g;s/>/\&gt;/g')"
 printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' '<plist version="1.0"><dict>' "<key>Label</key><string>$label</string>" "<key>ProgramArguments</key><array><string>$escaped</string><string>sync</string></array>" '<key>StartInterval</key><integer>900</integer><key>RunAtLoad</key><true/><key>Umask</key><integer>63</integer></dict></plist>' > "$unit"
 plutil -lint "$unit"
 launchctl bootstrap "$domain" "$unit"
+printf '%s\n' "$release_version" > "$lib/release-version.new"
+mv "$lib/release-version.new" "$lib/release-version"
 stopped=false
 echo 'Installed LaunchAgent. Runs at login and every 15 minutes while logged in. Use ~/.local/bin/device-sync status.'
