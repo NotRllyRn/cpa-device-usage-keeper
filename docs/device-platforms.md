@@ -5,9 +5,12 @@ of SQLite and server code for Linux/amd64, macOS arm64/amd64, and Windows arm64/
 They use official pinned ccusage 20.0.43 platform binaries. No Node/npm installation
 is needed on devices. These are private test candidates, not signed public releases.
 
-Build all client bundles: `python3 scripts/build-device-bundles.py /new/output/path`.
-Each subdirectory has a platform binary, verified collector archive, installers,
-and SHA256SUMS. Transfer the matching directory via a trusted channel.
+Build all client bundles: `python3 scripts/build-device-bundles.py /new/output/path APPROVED_TAG`
+(replace the tag with an approved stable `vX.Y.Z`). This builds locally; it does not
+publish anything. Each subdirectory has a platform binary, verified collector archive,
+installers, and SHA256SUMS. The output also contains versioned ZIPs and per-archive
+`.zip.sha256` manifests for the hosted bootstrap. Transfer the matching directory
+via a trusted channel. Publishing artifacts or a public release requires separate approval.
 Initial setup uses the same [source selection menu](device-sources.md) on every
 platform. Enter accepts all checked roots; type numbers to deselect or add manual
 paths. Scheduled sync never discovers new roots. Updates/repair preserve consent;
@@ -63,5 +66,10 @@ Linux tests, race tests and cross-compilation pass. macOS/Windows native executi
 terminal prompts, launchd and Task Scheduler remain unverified on their native OS.
 Do not mistake cross-compilation for native certification. Keep configuration and
 state backups together; do not delete state to work around installer errors.
-The global bootstrap currently dispatches Linux/macOS Bash and a separate Windows
-PowerShell entry point. Hosted OS detection/download bootstrap is not published.
+The [hosted bootstrap](device-install.md) detects supported OS/architecture and
+uses pinned release bundles. Scripts are implemented but release artifacts are
+not published, so hosted commands are not yet available. No-argument offline runs
+show an action menu, including cancel. Unix partial-state repair requires restoring
+a backup. Windows repair requires retained config/state and no registered task;
+uninstall stops the task and retains state, but reinstall/repair is not a transactional
+update and has no automatic rollback.

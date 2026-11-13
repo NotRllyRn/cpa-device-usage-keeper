@@ -6,12 +6,20 @@ if [[ "$(uname -s)" == Darwin ]]; then
   base="${DEVICE_USAGE_BUNDLE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
   exec bash "$base/install-macos.sh" "$@"
 fi
-mode="${1:-install}"
+mode="${1:-menu}"
 [[ -z "${DEVICE_USAGE_STATE:-}" ]] || { echo 'Installer supports only the default state directory; custom state requires manual scheduling.' >&2; exit 1; }
 bin="$HOME/.local/bin"
 lib="$HOME/.local/lib/device-usage-keeper"
 units="$HOME/.config/systemd/user"
+if [[ "$mode" == menu ]]; then
+  if [[ -d "$HOME/.local/state/device-usage-keeper" || -e "$bin/device-sync" || -e "$lib/ccusage" || -e "$units/device-usage-keeper.timer" || -e "$units/device-usage-keeper.service" ]]; then
+    printf 'Existing or partial installation found. Update requires a complete installation; partial state needs backup recovery.\n'
+  fi
+  printf 'Choose: install / update / sources / status / uninstall / cancel: ' >/dev/tty
+  read -r mode </dev/tty
+fi
 case "$mode" in
+  cancel|'') exit 0 ;;
   sources) exec "$bin/device-sync" sources ;;
   status) systemctl --user status device-usage-keeper.timer --no-pager; exec "$bin/device-sync" status ;;
   uninstall)
@@ -36,7 +44,7 @@ if [[ -z "${DEVICE_USAGE_BUNDLE:-}" ]]; then
 [[ "$DEVICE_USAGE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$DEVICE_USAGE_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo 'Invalid version/checksum.' >&2; exit 1; }
 fi
 state="$HOME/.local/state/device-usage-keeper"
-if [[ "$mode" == install && ( -e "$state/config.json" || -e "$state/state.json" ) ]]; then echo 'Already configured; use update.' >&2; exit 1; fi
+if [[ "$mode" == install && ( -e "$state/config.json" || -e "$state/state.json" || -e "$bin/device-sync" || -e "$lib/ccusage" || -e "$units/device-usage-keeper.service" || -e "$units/device-usage-keeper.timer" ) ]]; then echo 'Existing or partial installation; use update for complete installs, otherwise restore a backup. Do not delete private state.' >&2; exit 1; fi
 if [[ "$mode" == update ]]; then
   for file in "$state/config.json" "$state/state.json" "$bin/device-sync" "$lib/ccusage" "$units/device-usage-keeper.service" "$units/device-usage-keeper.timer"; do
     [[ -f "$file" ]] || { echo 'Incomplete installation; restore from backup before update.' >&2; exit 1; }

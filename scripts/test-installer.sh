@@ -30,9 +30,9 @@ EOF
 chmod +x "$tmp/bin/"* "$tmp/bundle/device-sync-linux-amd64" "$tmp/bundle/package/bin/ccusage"
 (cd "$tmp/bundle" && tar czf collector.tgz package && sha256sum device-sync-linux-amd64 collector.tgz > SHA256SUMS)
 export DEVICE_USAGE_BUNDLE="$tmp/bundle"
-bash "$root/install.sh" >/dev/null
+bash "$root/install.sh" install >/dev/null
 test -f "$HOME/.config/systemd/user/device-usage-keeper.timer"
-if bash "$root/install.sh" > /dev/null 2>&1; then echo 'Reinstall should reject existing state'; exit 1; fi
+if bash "$root/install.sh" install > /dev/null 2>&1; then echo 'Reinstall should reject existing state'; exit 1; fi
 before="$(sha256sum "$HOME/.local/bin/device-sync")"
 if FAIL_ENABLE=1 bash "$root/install.sh" update > /dev/null 2>&1; then echo 'Update should fail'; exit 1; fi
 test "$(sha256sum "$HOME/.local/bin/device-sync")" = "$before"

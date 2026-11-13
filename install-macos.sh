@@ -3,14 +3,22 @@ set -euo pipefail
 umask 077
 [[ "$(uname -s)" == Darwin ]] || { echo 'macOS required' >&2; exit 1; }
 [[ -z "${DEVICE_USAGE_STATE:-}" ]] || { echo 'Custom state requires manual scheduling' >&2; exit 1; }
-mode="${1:-install}"
+mode="${1:-menu}"
 label=com.device-usage-keeper.sync
 unit="$HOME/Library/LaunchAgents/$label.plist"
 exe="$HOME/.local/bin/device-sync"
 lib="$HOME/.local/lib/device-usage-keeper"
 state="$HOME/.local/state/device-usage-keeper"
 domain="gui/$(id -u)"
+if [[ "$mode" == menu ]]; then
+ if [[ -d "$state" || -e "$exe" || -e "$lib/ccusage" || -e "$unit" ]]; then
+  echo 'Existing or partial installation found. Update requires a complete installation; partial state needs backup recovery.'
+ fi
+ printf 'Choose: install / update / sources / status / uninstall / cancel: ' >/dev/tty
+ read -r mode </dev/tty
+fi
 case "$mode" in
+ cancel|'') exit 0 ;;
  sources) exec "$exe" sources ;;
  status) launchctl print "$domain/$label"; exec "$exe" status ;;
  uninstall) launchctl bootout "$domain/$label" 2>/dev/null || true; rm -f "$unit" "$exe" "$lib/ccusage"; echo 'Uninstalled; private state retained. Revoke device in dashboard.'; exit ;;
@@ -20,7 +28,7 @@ esac
 bundle="${DEVICE_USAGE_BUNDLE:?Set DEVICE_USAGE_BUNDLE to the trusted macOS bundle directory}"
 case "$(uname -m)" in arm64) arch=arm64 ;; x86_64) arch=amd64 ;; *) echo 'Unsupported architecture' >&2; exit 1 ;; esac
 (cd "$bundle" && shasum -a 256 -c SHA256SUMS >/dev/null)
-if [[ "$mode" == install && ( -e "$state/config.json" || -e "$state/state.json" ) ]]; then echo 'Already configured; use update' >&2; exit 1; fi
+if [[ "$mode" == install && ( -e "$state/config.json" || -e "$state/state.json" || -e "$exe" || -e "$lib/ccusage" || -e "$unit" ) ]]; then echo 'Existing or partial installation; use update for complete installs, otherwise restore a backup. Do not delete private state.' >&2; exit 1; fi
 if [[ "$mode" == update ]]; then
  for f in "$exe" "$lib/ccusage" "$unit" "$state/config.json" "$state/state.json"; do [[ -f "$f" ]] || { echo 'Incomplete installation; restore backup' >&2; exit 1; }; done
 fi

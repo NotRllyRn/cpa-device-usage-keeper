@@ -4,7 +4,7 @@ For macOS and Windows private test bundles, see [device platforms](device-platfo
 All installers now offer [source discovery and selection](device-sources.md): Enter
 accepts all checked roots; numbered toggles deselect them. Saved consent is enforced
 on scheduled runs, not just displayed by the installer.
-The Linux release workflow below is separate from those platform installers.
+Hosted bootstraps hand off to these same offline bundle installers.
 
 The uploader is implemented locally. Private test bundles can now be built and
 installed without a public release; follow [CPA and device testing](cpa-testing.md).
@@ -14,28 +14,45 @@ run it on this machine or production as part of development.
 
 ## Release installation contract
 
-Initial support: Linux x86_64 with a working user systemd instance. No root,
-new npm package, or end-user compiler is required. Other platforms are unsupported.
-The installer downloads a versioned uploader binary and the official pinned
-ccusage 20.0.43 Linux binary, verifies SHA256/SHA512, and prompts on `/dev/tty`
-for an HTTPS endpoint and hidden upload token. Obtain the upload token through
-admin enrollment; never use CPA credentials. Secrets do not go in command lines.
+Supported: Linux x86_64 with user systemd, macOS Intel/Apple Silicon, and
+Windows x64/ARM64. Linux ARM is not supported. No root, npm or compiler is needed.
+Unix requires curl, Python 3 (safe ZIP validation), and Bash; Windows requires
+PowerShell and curl.exe. An interactive terminal is required. Obtain an upload
+token through admin enrollment; never use CPA credentials or put secrets in commands.
 
-Once a release is approved and published, the intended one-command form is:
+**Unavailable until an approved release is published.** Replace `APPROVED_TAG`
+in both places with the same approved stable `vX.Y.Z` tag; there is no guessed
+version or development/latest fallback. Prefer downloading and inspecting scripts.
 
 ```sh
-curl --fail --proto '=https' --tlsv1.2 -sS https://raw.githubusercontent.com/NotRllyRn/cpa-device-usage-keeper/APPROVED_TAG/install.sh | DEVICE_USAGE_VERSION=APPROVED_TAG DEVICE_USAGE_SHA256=TRUSTED_BINARY_SHA256 bash
+curl -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://raw.githubusercontent.com/NotRllyRn/cpa-device-usage-keeper/APPROVED_TAG/bootstrap.sh | DEVICE_USAGE_VERSION=APPROVED_TAG sh
 ```
 
-Replace the placeholders with a published immutable tag and a trusted checksum.
-Prefer downloading and inspecting the script before executing it. Never select
-a checksum from an untrusted channel merely to make verification pass.
+Windows (download, inspect, then run from an interactive PowerShell terminal):
+
+```powershell
+curl.exe -fsSL --proto '=https' --proto-redir '=https' --max-time 60 https://raw.githubusercontent.com/NotRllyRn/cpa-device-usage-keeper/APPROVED_TAG/bootstrap.ps1 -o bootstrap.ps1
+# Inspect bootstrap.ps1 before running:
+.\bootstrap.ps1 -Version APPROVED_TAG
+```
+
+The bootstrap downloads `device-usage-vX.Y.Z-OS-ARCH.zip` and its `.zip.sha256`
+from the same GitHub release, checks SHA256 and rejects unexpected, duplicate,
+non-regular or oversized archive entries before invoking the offline installer.
+Checksums detect corruption, **not independent authenticity**: these are not signatures.
+HTTPS redirects are restricted to HTTPS and downloads have size/time limits.
+Unix prompts use the terminal even when the bootstrap arrives through a pipe.
 
 `bash install.sh update`, `bash install.sh status`, and `bash install.sh uninstall`
 manage the same installation. Updates retain private state and restore the prior
 binaries/units on ordinary command failure. Power loss/SIGKILL recovery is not
 claimed. Uninstall removes scheduling and executables but keeps state; revoke
-the device in the dashboard. Re-running install over existing state is rejected.
+the device in the dashboard. No-argument runs offer an action menu and detect
+partial installs (binaries, scheduler or state), not only config.json. Explicit
+`install` over retained state is rejected. Unix update requires a complete install;
+partial-state repair is not automated: restore a private backup rather than reset
+state. Windows offers repair only with valid retained state and no registered task;
+it does not offer in-place update or rollback. See [platform limits](device-platforms.md).
 
 The timer runs every 15 minutes with jitter, while the user systemd instance is
 running. The installer does not enable lingering. Custom `DEVICE_USAGE_STATE`
