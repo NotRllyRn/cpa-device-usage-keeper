@@ -208,6 +208,47 @@ func TestSourceBatches(t *testing.T) {
 	}
 }
 
+func TestCopilotExporterConsent(t *testing.T) {
+	home := sourceDir(t, t.TempDir(), "copilot")
+	otel := sourceDir(t, home, "otel")
+	file := filepath.Join(otel, "trace.jsonl")
+	// Synthetic span in the pinned collector's documented JSONL format.
+	span := `{"type":"span","traceId":"synthetic","spanId":"synthetic","name":"chat gpt-5.4","endTime":[1769995200,0],"attributes":{"gen_ai.operation.name":"chat","gen_ai.response.model":"gpt-5.4","gen_ai.conversation.id":"synthetic","gen_ai.usage.input_tokens":7,"gen_ai.usage.output_tokens":8}}` + "\n"
+	if err := os.WriteFile(file, []byte(span), 0600); err != nil {
+		t.Fatal(err)
+	}
+	sources := []Source{{"copilot", home}, {"copilot-otel", file}}
+	var out bytes.Buffer
+	// Unchecking only the nested exporter must refuse confirmation, not save.
+	if _, err := SelectSources(bufio.NewReader(strings.NewReader("2\n\n")), &out, home, sources); err == nil || !strings.Contains(out.String(), "Subtree exclusions are not supported") {
+		t.Fatalf("nested exporter exclusion accepted: %v %s", err, out.String())
+	}
+	out.Reset()
+	selected, err := SelectSources(bufio.NewReader(strings.NewReader("1\n\n\n")), &out, home, sources)
+	if err != nil || !reflect.DeepEqual(selected, sources[1:]) {
+		t.Fatalf("exporter-only selection: %+v %v", selected, err)
+	}
+	out.Reset()
+	both, err := SelectSources(bufio.NewReader(strings.NewReader("\n\n")), &out, home, sources)
+	if err != nil || !reflect.DeepEqual(both, sources) {
+		t.Fatalf("both selected: %+v %v", both, err)
+	}
+	collector := os.Getenv("DEVICE_USAGE_TEST_COLLECTOR")
+	if collector == "" {
+		t.Log("set DEVICE_USAGE_TEST_COLLECTOR for real Copilot telemetry integration")
+		return
+	}
+	for _, roots := range [][]Source{selected, both} {
+		got, err := Collect(context.Background(), Config{Collector: collector, CollectorConfig: filepath.Join(t.TempDir(), "ccusage.json"), Sources: roots})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("telemetry: %+v %v", got, err)
+		}
+		if got[0].Agent != "copilot" || got[0].Totals.Input != 7 || got[0].Totals.Output != 8 || got[0].TotalTokens != 15 {
+			t.Fatalf("telemetry must count once: %+v", got)
+		}
+	}
+}
+
 func TestCollectorEnvironmentExplicitExclusions(t *testing.T) {
 	t.Setenv("PI_AGENT_DIR", "/unapproved")
 	t.Setenv("COPILOT_OTEL_FILE_EXPORTER_PATH", "/unapproved")

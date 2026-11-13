@@ -31,7 +31,8 @@ Save this selection? [Y/n]:
 A root grants access to that agent's usage under the entire root, including future
 files. It is not a per-session filter. Nested roots for the same agent are rejected
 rather than double counted; an unchecked child cannot be excluded while its parent
-is checked. Select the narrower roots instead. Paths are canonicalized at setup;
+is checked. This also applies to an unchecked `copilot-otel` file beneath a
+checked Copilot home's `otel` directory. Select the narrower roots instead. Paths are canonicalized at setup;
 missing, unreadable, changed/symlink-retargeted, unknown or empty selections fail
 closed. You may confirm an empty selection to disable collection; scheduled runs
 then refuse to collect or upload. Commas in paths are unsupported because the

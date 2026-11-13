@@ -368,8 +368,14 @@ func SelectSources(reader *bufio.Reader, out io.Writer, home string, candidates 
 				continue
 			}
 			for _, allowed := range selected {
-				if allowed.Agent == excluded.Agent {
-					rel, _ := filepath.Rel(allowed.Path, excluded.Path)
+				parent := allowed.Path
+				covered := allowed.Agent == excluded.Agent
+				if allowed.Agent == "copilot" && excluded.Agent == "copilot-otel" {
+					parent = filepath.Join(parent, "otel")
+					covered = true
+				}
+				if covered {
+					rel, _ := filepath.Rel(parent, excluded.Path)
 					if inside(rel) {
 						conflict = true
 					}
