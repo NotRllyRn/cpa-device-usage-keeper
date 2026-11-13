@@ -12,6 +12,7 @@ bin="$HOME/.local/bin"
 lib="$HOME/.local/lib/device-usage-keeper"
 units="$HOME/.config/systemd/user"
 case "$mode" in
+  sources) exec "$bin/device-sync" sources ;;
   status) systemctl --user status device-usage-keeper.timer --no-pager; exec "$bin/device-sync" status ;;
   uninstall)
     systemctl --user disable --now device-usage-keeper.timer
@@ -22,7 +23,7 @@ case "$mode" in
     printf 'Removed binaries and scheduler. Private state retained for safe revisions and retry. Revoke this device in the dashboard.\n'
     exit 0 ;;
   install|update) ;;
-  *) printf 'Usage: install.sh [install|update|status|uninstall]\n' >&2; exit 1 ;;
+  *) printf 'Usage: install.sh [install|update|sources|status|uninstall]\n' >&2; exit 1 ;;
 esac
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo 'Only Linux x86_64 is supported.' >&2; exit 1; }
 for tool in curl sha256sum sha512sum tar systemctl; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
@@ -88,6 +89,7 @@ install -m 700 "$tmp/ccusage" "$lib/ccusage.new"
 mv "$bin/device-sync.new" "$bin/device-sync"
 mv "$lib/ccusage.new" "$lib/ccusage"
 if [[ "$mode" == install ]]; then "$bin/device-sync" configure; fi
+if [[ "$mode" == update ]]; then printf 'Saved source consent preserved. Legacy configurations without consent cannot sync; run install.sh sources to approve roots.\n'; fi
 printf '%s\n' '[Unit]' 'Description=Upload coding-agent aggregate snapshots' '[Service]' 'Type=oneshot' 'ExecStart=%h/.local/bin/device-sync sync' 'UMask=0077' 'TimeoutStartSec=15min' 'NoNewPrivileges=true' 'PrivateTmp=true' > "$units/device-usage-keeper.service"
 printf '%s\n' '[Unit]' 'Description=Collect device usage every 15 minutes' '[Timer]' 'OnBootSec=2min' 'OnUnitActiveSec=15min' 'RandomizedDelaySec=60' '[Install]' 'WantedBy=timers.target' > "$units/device-usage-keeper.timer"
 systemctl --user daemon-reload

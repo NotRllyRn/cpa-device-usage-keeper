@@ -26,10 +26,11 @@ import (
 const CollectorVersion = "20.0.43"
 
 type Config struct {
-	URL             string `json:"url"`
-	Token           string `json:"token"`
-	Collector       string `json:"collector"`
-	CollectorConfig string `json:"collector_config"`
+	URL             string   `json:"url"`
+	Token           string   `json:"token"`
+	Collector       string   `json:"collector"`
+	CollectorConfig string   `json:"collector_config"`
+	Sources         []Source `json:"sources"`
 }
 type Entry struct {
 	Revision int64            `json:"revision"`
@@ -130,25 +131,68 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 	}
 	return b.Buffer.Write(p)
 }
-func Collect(ctx context.Context, c Config) ([]device.Snapshot, error) {
+func collectBatch(ctx context.Context, c Config) ([]device.Snapshot, error) {
+	if err := ValidateSources(c.Sources); err != nil {
+		return nil, err
+	}
+	// A new empty home/config on every invocation prevents all implicit source
+	// and named-store discovery. Never use the user's editable ccusage config.
+	empty, err := os.MkdirTemp(filepath.Dir(c.CollectorConfig), ".collector-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(empty)
+	if err = os.Mkdir(filepath.Join(empty, "projects"), 0700); err != nil {
+		return nil, err
+	}
+	config := filepath.Join(empty, "ccusage.json")
+	if err = Save(config, map[string]any{}); err != nil {
+		return nil, err
+	}
+	env := collectorEnvironment(c.Sources, empty)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	version := exec.CommandContext(ctx, c.Collector, "--version")
+	version.Env, version.Dir = env, empty
 	var out cappedBuffer
 	out.limit = 1024
 	version.Stdout = &out
 	if version.Run() != nil || strings.TrimSpace(out.String()) != "ccusage "+CollectorVersion {
 		return nil, errors.New("collector version mismatch")
 	}
-	cmd := exec.CommandContext(ctx, c.Collector, "daily", "--by-agent", "--json", "--timezone", "UTC", "--offline", "--config", c.CollectorConfig)
+	cmd := exec.CommandContext(ctx, c.Collector, "daily", "--by-agent", "--json", "--timezone", "UTC", "--offline", "--config", config)
+	cmd.Env, cmd.Dir = env, empty
 	out = cappedBuffer{limit: 32 * 1024 * 1024}
 	cmd.Stdout = &out
 	if cmd.Run() != nil {
 		return nil, errors.New("collector failed; raw output withheld for privacy")
 	}
-	return ParseDaily(out.Bytes(), time.Now().UTC())
+	snapshots, err := ParseDaily(out.Bytes(), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	allowed := map[string]bool{}
+	for _, s := range c.Sources {
+		agent := s.Agent
+		if agent == "copilot-otel" {
+			agent = "copilot"
+		}
+		allowed[agent] = true
+	}
+	for _, s := range snapshots {
+		if !allowed[s.Agent] {
+			return nil, errors.New("collector returned an unselected agent")
+		}
+	}
+	return snapshots, nil
 }
-func Run(ctx context.Context, dir string) error {
+func Run(ctx context.Context, dir string) error { return runSync(ctx, dir, false) }
+
+// Drain only uploads the existing outbox. It is explicit because those payloads
+// can contain data from roots the user intends to deselect.
+func Drain(ctx context.Context, dir string) error { return runSync(ctx, dir, true) }
+
+func runSync(ctx context.Context, dir string, drainOnly bool) error {
 	if err := PrivateDir(dir); err != nil {
 		return err
 	}
@@ -178,6 +222,11 @@ func Run(ctx context.Context, dir string) error {
 	if state.Entries == nil {
 		return errors.New("invalid state; do not reset revisions")
 	}
+	if !drainOnly {
+		if err = ValidateSources(c.Sources); err != nil {
+			return err
+		}
+	}
 	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}
 	// Always acknowledge previously persisted payloads before collecting again.
 	flush := func() error {
@@ -204,6 +253,9 @@ func Run(ctx context.Context, dir string) error {
 	}
 	if err = flush(); err != nil {
 		return err
+	}
+	if drainOnly {
+		return nil
 	}
 	snapshots, err := Collect(ctx, c)
 	if err != nil {

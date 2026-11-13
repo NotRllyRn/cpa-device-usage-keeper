@@ -7,7 +7,11 @@ is needed on devices. These are private test candidates, not signed public relea
 
 Build all client bundles: `python3 scripts/build-device-bundles.py /new/output/path`.
 Each subdirectory has a platform binary, verified collector archive, installers,
-and SHA256SUMS. Transfer the matching directory via a trusted channel. A checksum
+and SHA256SUMS. Transfer the matching directory via a trusted channel.
+Initial setup uses the same [source selection menu](device-sources.md) on every
+platform. Enter accepts all checked roots; type numbers to deselect or add manual
+paths. Scheduled sync never discovers new roots. Updates/repair preserve consent;
+legacy configurations without approved sources stop collecting until reconfigured. A checksum
 manifest alongside the files detects corruption, not a malicious bundle replacement.
 
 ## macOS
@@ -23,7 +27,7 @@ DEVICE_USAGE_BUNDLE=/path/to/bundle bash /path/to/bundle/install.sh
 enrolled device's upload token. It creates a per-user LaunchAgent, runs at login
 and every 15 minutes while logged in, and keeps state in
 `~/.local/state/device-usage-keeper`. Use `~/.local/bin/device-sync sync` or `status`.
-Use `install.sh update|status|uninstall` with the same bundle variable. Uninstall
+Use `install.sh update|sources|status|uninstall` with the same bundle variable. Uninstall
 retains state and history. Installer updates attempt rollback on ordinary command
 failure; power loss recovery is not claimed. Unsigned binaries may require local
 security approval; do not disable Gatekeeper globally.
@@ -48,7 +52,7 @@ for manual configuration and custom state directories.
 & "$HOME\.local\bin\device-sync.exe" status
 ```
 
-Use `-Mode status` or `-Mode uninstall`. If task registration failed after successful
+Use `-Mode sources`, `-Mode status` or `-Mode uninstall`. If task registration failed after successful
 configuration, use `-Mode repair -Bundle C:\path\bundle` to restore scheduling
 without resetting history revisions. Windows in-place update is deliberately
 rejected until its rollback path is implemented and tested.

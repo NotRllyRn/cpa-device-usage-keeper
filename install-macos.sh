@@ -11,10 +11,11 @@ lib="$HOME/.local/lib/device-usage-keeper"
 state="$HOME/.local/state/device-usage-keeper"
 domain="gui/$(id -u)"
 case "$mode" in
+ sources) exec "$exe" sources ;;
  status) launchctl print "$domain/$label"; exec "$exe" status ;;
  uninstall) launchctl bootout "$domain/$label" 2>/dev/null || true; rm -f "$unit" "$exe" "$lib/ccusage"; echo 'Uninstalled; private state retained. Revoke device in dashboard.'; exit ;;
  install|update) ;;
- *) echo 'Usage: install.sh [install|update|status|uninstall]' >&2; exit 1 ;;
+ *) echo 'Usage: install.sh [install|update|sources|status|uninstall]' >&2; exit 1 ;;
 esac
 bundle="${DEVICE_USAGE_BUNDLE:?Set DEVICE_USAGE_BUNDLE to the trusted macOS bundle directory}"
 case "$(uname -m)" in arm64) arch=arm64 ;; x86_64) arch=amd64 ;; *) echo 'Unsupported architecture' >&2; exit 1 ;; esac
@@ -46,6 +47,7 @@ fi
 install -m 700 "$tmp/device-sync" "$exe.new"; mv "$exe.new" "$exe"
 install -m 700 "$tmp/ccusage" "$lib/ccusage.new"; mv "$lib/ccusage.new" "$lib/ccusage"
 if [[ "$mode" == install ]]; then "$exe" configure; fi
+if [[ "$mode" == update ]]; then echo 'Saved source consent preserved. Legacy configurations without consent cannot sync; run install.sh sources to approve roots.'; fi
 # Escape paths for XML; launchd ProgramArguments never invokes a shell.
 escaped="$(printf '%s' "$exe" | sed 's/\&/\&amp;/g;s/</\&lt;/g;s/>/\&gt;/g')"
 printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' '<plist version="1.0"><dict>' "<key>Label</key><string>$label</string>" "<key>ProgramArguments</key><array><string>$escaped</string><string>sync</string></array>" '<key>StartInterval</key><integer>900</integer><key>RunAtLoad</key><true/><key>Umask</key><integer>63</integer></dict></plist>' > "$unit"

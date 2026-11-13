@@ -1,4 +1,4 @@
-param([ValidateSet('install','repair','update','status','uninstall')][string]$Mode = 'install', [string]$Bundle = $env:DEVICE_USAGE_BUNDLE)
+param([ValidateSet('install','repair','update','sources','status','uninstall')][string]$Mode = 'install', [string]$Bundle = $env:DEVICE_USAGE_BUNDLE)
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'Windows required' }
 if ($env:DEVICE_USAGE_STATE) { throw 'Custom state requires manual scheduling' }
@@ -7,6 +7,7 @@ $lib = Join-Path $HOME '.local\lib\device-usage-keeper'
 $state = Join-Path $HOME '.local\state\device-usage-keeper'
 $exe = Join-Path $bin 'device-sync.exe'
 $task = 'DeviceUsageKeeper'
+if ($Mode -eq 'sources') { & $exe sources; exit $LASTEXITCODE }
 if ($Mode -eq 'status') { Get-ScheduledTask -TaskName $task; & $exe status; exit $LASTEXITCODE }
 if ($Mode -eq 'uninstall') {
  Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue

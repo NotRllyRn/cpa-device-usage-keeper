@@ -1,6 +1,9 @@
 # Device collector and installation
 
 For macOS and Windows private test bundles, see [device platforms](device-platforms.md).
+All installers now offer [source discovery and selection](device-sources.md): Enter
+accepts all checked roots; numbered toggles deselect them. Saved consent is enforced
+on scheduled runs, not just displayed by the installer.
 The Linux release workflow below is separate from those platform installers.
 
 The uploader is implemented locally. Private test bundles can now be built and
@@ -44,7 +47,7 @@ installer so the scheduled service cannot silently use a different directory.
 - Executable: `~/.local/bin/device-sync`
 - Pinned collector: `~/.local/lib/device-usage-keeper/ccusage`
 - Private state: `~/.local/state/device-usage-keeper/`
-- Commands: `device-sync configure|sync|status|version`
+- Commands: `device-sync configure|sources|drain|sync|status|version`
 
 Configuration initializes state before enabling collection. The state binds to
 the HTTPS URL and upload token. Changing either is rejected rather than silently
@@ -54,16 +57,21 @@ enroll a new device, retain/revoke the old record, and configure a fresh directo
 old and replacement devices overlap, so do not sum both. Migration/reconciliation
 of server backups or a new device is not automated.
 
-Each sync flushes persisted pending payloads first, then asks ccusage for all UTC
+Each sync validates saved source consent, flushes persisted pending payloads, then asks ccusage for approved UTC
 daily history using `--by-agent --json --offline`. Only changed snapshots are
 queued. The outbox uses fsync, atomic rename, and directory sync. Upload errors
 retain it; retryable failures use bounded retries and the next timer run retries
 again. Overlapping runs are excluded with a file lock. Redirects are refused.
 
-The generated ccusage configuration includes both conventional Pi and Pi-T3
-session roots. Edit the private `ccusage.json` to adjust discovery using ccusage's
-configuration format. No custom client parsers are included. Output is limited
-to 32 MiB and collection to five minutes; larger histories fail visibly rather
+Source roots are saved in private `config.json`. Use `device-sync sources` or
+`install.sh sources` to change them; do not edit `ccusage.json` to control collection.
+Updates retain consent, while legacy clients without an allowlist require explicit
+approval before syncing. Pending uploads block source changes; `device-sync drain`
+explicitly sends only those queued payloads. Deselecting does not delete uploaded
+history. See [source selection](device-sources.md) for discovery, supported roots,
+Goose/named-store limitations, and the isolation contract. No custom usage parsers
+are included. Output is limited
+to 32 MiB per collector invocation and total collection to five minutes; larger histories fail visibly rather
 than being silently truncated. Historical days missing from a later collection
 are retained; explicit smaller reports replace prior totals.
 

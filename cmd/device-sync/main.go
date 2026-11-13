@@ -14,6 +14,51 @@ import (
 	"cpa-usage-keeper/internal/deviceclient"
 )
 
+func openTerminal() (*os.File, error) {
+	terminal := "/dev/tty"
+	if runtime.GOOS == "windows" {
+		terminal = "CONIN$"
+	}
+	tty, err := os.OpenFile(terminal, os.O_RDWR, 0)
+	if err != nil {
+		return nil, errors.New("interactive terminal required")
+	}
+	return tty, nil
+}
+
+func chooseSources(reader *bufio.Reader, home string, c deviceclient.Config) ([]deviceclient.Source, error) {
+	candidates, warnings := deviceclient.DiscoverSources(home, os.Getenv)
+	configured, notes := deviceclient.DiscoverConfigSources(home, []string{c.CollectorConfig})
+	warnings = append(warnings, notes...)
+	for _, s := range configured {
+		found := false
+		for _, existing := range candidates {
+			if existing == s {
+				found = true
+			}
+		}
+		if !found {
+			candidates = append(candidates, s)
+		}
+	}
+	for _, warning := range warnings {
+		fmt.Fprintln(os.Stderr, warning)
+	}
+	// Retain manually entered roots in an explicit reconfiguration menu too.
+	for _, old := range c.Sources {
+		found := false
+		for _, s := range candidates {
+			if s == old {
+				found = true
+			}
+		}
+		if !found {
+			candidates = append(candidates, old)
+		}
+	}
+	return deviceclient.SelectSources(reader, os.Stderr, home, candidates)
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "device-sync:", err)
@@ -42,6 +87,17 @@ func run() error {
 		return nil
 	case "sync":
 		return deviceclient.Run(context.Background(), dir)
+	case "drain":
+		return deviceclient.Drain(context.Background(), dir)
+	case "sources":
+		return deviceclient.ReconfigureSources(dir, func(c deviceclient.Config) ([]deviceclient.Source, error) {
+			tty, err := openTerminal()
+			if err != nil {
+				return nil, err
+			}
+			defer tty.Close()
+			return chooseSources(bufio.NewReader(tty), home, c)
+		})
 	case "status":
 		if err := deviceclient.PrivateDir(dir); err != nil {
 			return err
@@ -57,6 +113,17 @@ func run() error {
 			}
 		}
 		fmt.Printf("Snapshots: %d\nPending: %d\nLast success: %s\n", len(state.Entries), pending, state.LastSuccess)
+		var c deviceclient.Config
+		if err := deviceclient.Load(filepath.Join(dir, "config.json"), &c); err != nil {
+			return err
+		}
+		fmt.Printf("Approved roots: %d\n", len(c.Sources))
+		if len(c.Sources) == 0 {
+			fmt.Println("Collection disabled until you run device-sync sources.")
+		}
+		for _, source := range c.Sources {
+			fmt.Printf("  [x] %s  %s\n", source.Agent, source.Path)
+		}
 		return nil
 	case "configure":
 		if err := deviceclient.PrivateDir(dir); err != nil {
@@ -68,13 +135,9 @@ func run() error {
 				return errors.New("configuration/state already exists or is inaccessible; preserve it, use update or a fresh directory with a newly enrolled device")
 			}
 		}
-		terminal := "/dev/tty"
-		if runtime.GOOS == "windows" {
-			terminal = "CONIN$"
-		}
-		tty, err := os.OpenFile(terminal, os.O_RDWR, 0)
+		tty, err := openTerminal()
 		if err != nil {
-			return errors.New("interactive terminal required")
+			return err
 		}
 		defer tty.Close()
 		reader := bufio.NewReader(tty)
@@ -103,16 +166,15 @@ func run() error {
 		if err = deviceclient.ValidateConfig(c); err != nil {
 			return err
 		}
-		if _, err = os.Lstat(config); os.IsNotExist(err) {
-			if err = deviceclient.Save(config, map[string]any{"pi": map[string]any{"defaults": map[string]any{"piPath": strings.Join([]string{filepath.Join(home, ".pi", "agent", "sessions"), filepath.Join(home, ".config", "pi-t3", "agent", "sessions")}, ",")}}}); err != nil {
-				return err
-			}
+		c.Sources, err = chooseSources(reader, home, c)
+		if err != nil {
+			return err
 		}
 		if err = deviceclient.Save(filepath.Join(dir, "state.json"), deviceclient.State{Destination: deviceclient.Destination(c), Entries: map[string]deviceclient.Entry{}}); err != nil {
 			return err
 		}
 		return deviceclient.Save(path, c)
 	default:
-		return errors.New("usage: device-sync configure|sync|status|version")
+		return errors.New("usage: device-sync configure|sources|drain|sync|status|version")
 	}
 }
