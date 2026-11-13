@@ -36,8 +36,8 @@ esac
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo 'Only Linux x86_64 is supported.' >&2; exit 1; }
 for tool in curl sha256sum sha512sum tar systemctl; do command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }; done
 systemctl --user show-environment >/dev/null || { echo 'A working user systemd instance is required.' >&2; exit 1; }
-# Releases are intentionally not published yet. Use an explicitly approved
-# immutable release version and its SHA256 from a trusted release channel.
+# Direct binary installation requires an explicit immutable release version and
+# trusted SHA256. Hosted bootstraps supply a verified complete bundle instead.
 if [[ -z "${DEVICE_USAGE_BUNDLE:-}" ]]; then
 : "${DEVICE_USAGE_VERSION:?Set DEVICE_USAGE_VERSION to an approved release tag}"
 : "${DEVICE_USAGE_SHA256:?Set DEVICE_USAGE_SHA256 to the trusted device-sync-linux-amd64 SHA256}"
