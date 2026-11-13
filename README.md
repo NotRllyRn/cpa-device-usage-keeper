@@ -6,7 +6,7 @@ Independent fork of [CPA Usage Keeper](https://github.com/Willxup/cpa-usage-keep
 
 ## Install on your devices
 
-**Public release pending: these commands will work only after the bootstrap scripts and client bundles are published.** Private bundles are available for [controlled testing](docs/cpa-testing.md).
+Download the latest [client release](https://github.com/NotRllyRn/cpa-device-usage-keeper/releases/latest) using the scripts below. Review downloaded scripts before running them.
 
 ### Linux and macOS
 

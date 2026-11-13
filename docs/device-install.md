@@ -6,11 +6,9 @@ accepts all checked roots; numbered toggles deselect them. Saved consent is enfo
 on scheduled runs, not just displayed by the installer.
 Hosted bootstraps hand off to these same offline bundle installers.
 
-The uploader is implemented locally. Private test bundles can now be built and
-installed without a public release; follow [CPA and device testing](cpa-testing.md).
-**No approved public release binaries exist yet**, so the hosted release command
-below is not currently a working public installation offer. Do not
-run it on this machine or production as part of development.
+Client bundles are published as GitHub releases. For private builds and server
+setup, follow [CPA and device testing](cpa-testing.md). Publishing a client release
+does not install it on devices or update the CPA plugin.
 
 ## Release installation contract
 
@@ -20,7 +18,6 @@ Unix requires curl, Python 3 (safe ZIP validation), and Bash; Windows requires
 PowerShell and curl.exe. An interactive terminal is required. Obtain an upload
 token through admin enrollment; never use CPA credentials or put secrets in commands.
 
-**Unavailable until an approved release with bootstrap assets is published.**
 The bootstrap resolves GitHub's latest stable release once and pins downloads to
 that validated tag. Drafts, prereleases and development tags are rejected.
 Prefer downloading and inspecting scripts.
