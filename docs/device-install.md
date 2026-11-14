@@ -12,7 +12,7 @@ does not install it on devices or update the CPA plugin.
 
 ## Release installation contract
 
-Supported: Linux x86_64 with user systemd, macOS Intel/Apple Silicon, and
+Supported: Linux x86_64 with user systemd or cron, macOS Intel/Apple Silicon, and
 Windows x64/ARM64. Linux ARM is not supported. No root, npm or compiler is needed.
 Unix requires curl, Python 3 (safe ZIP validation), and Bash; Windows requires
 PowerShell and curl.exe. An interactive terminal is required. Obtain an upload
@@ -59,7 +59,8 @@ by version checks.
 
 `bash install.sh update`, `bash install.sh status`, and `bash install.sh uninstall`
 manage the same installation. Updates retain private state and restore the prior
-binaries/units on ordinary command failure. Power loss/SIGKILL recovery is not
+binaries, release marker and scheduler on ordinary command failure. If rollback itself
+fails, the installer reports a private recovery directory instead of claiming success. Power loss/SIGKILL recovery is not
 claimed. Uninstall removes scheduling and executables but keeps state; revoke
 the device in the dashboard. No-argument runs offer an action menu and detect
 partial installs (binaries, scheduler or state), not only config.json. Explicit
@@ -68,8 +69,37 @@ partial-state repair is not automated: restore a private backup rather than rese
 state. Windows offers repair only with valid retained state and no registered task;
 it does not offer in-place update or rollback. See [platform limits](device-platforms.md).
 
-The timer runs every 15 minutes with jitter, while the user systemd instance is
-running. The installer does not enable lingering. Custom `DEVICE_USAGE_STATE`
+Linux prefers a usable user systemd instance. Its timer runs every 15 minutes
+with jitter while that instance is running; the installer does not enable lingering.
+If user systemd is unavailable (common in root containers without a session bus),
+installation falls back to the current user's `crontab`. This requires `crontab`,
+`pgrep`, and a running process named `cron` or `crond`. Missing prerequisites produce
+an error before configuration. Install the appropriate cron package and arrange
+for its daemon to run through your container supervisor/entrypoint or OS service
+manager, then rerun the installer. The installer never installs packages, starts
+daemons, or enables OS services. A daemon must remain running and be started again
+after container restarts; installing a crontab alone does not provide that lifecycle.
+
+Cron runs at minutes 0, 15, 30 and 45, without jitter. A private runner supplies the
+installation's HOME and a minimal PATH; the existing sync lock excludes overlapping
+collection. Raw command output is discarded to avoid logging tokens or local data.
+`~/.local/lib/device-usage-keeper/cron-status` holds only the most recent fixed
+success/failure message (overwritten each run, private permissions), not a history.
+Use `device-sync status` for upload state. `install.sh status` also checks the daemon
+and shows the managed entry. Uninstall removes only the marked job, even if the
+daemon has stopped, and retains configuration, consent, revisions and pending data.
+An already-running cron sync may finish after uninstall/update.
+
+The selected scheduler is saved in `~/.local/lib/device-usage-keeper/scheduler`.
+Updates keep it, even if systemd later becomes available, and replace rather than
+duplicate the managed entry. Legacy systemd installs keep systemd. Other crontab
+lines (including environment assignments and comments) are preserved; avoid editing
+your crontab concurrently with install/update/uninstall, since crontab has no atomic
+compare-and-swap interface. Scheduler migration is not automated. A failed install
+before configuration can simply be rerun; retained configured state still requires
+backup recovery rather than a reset.
+
+Custom `DEVICE_USAGE_STATE`
 is supported by the CLI for manual use, but deliberately rejected by the
 installer so the scheduled service cannot silently use a different directory.
 

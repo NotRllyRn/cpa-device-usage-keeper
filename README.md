@@ -24,7 +24,7 @@ curl.exe -fsSL https://github.com/NotRllyRn/cpa-device-usage-keeper/releases/lat
 
 Enroll a device in the dashboard, then enter its upload token and your dashboard's HTTPS URL when prompted. Review the discovered paths: **Enter accepts all checked paths; numbers toggle selections.** Approved usage uploads every 15 minutes while the user scheduler is running.
 
-Installers default to the latest stable release and ask before changing an installed version. **Windows in-place upgrades are not yet supported.** Supported: Linux x86-64, macOS Intel/Apple Silicon, Windows x64/ARM64. Unix requires curl, Python 3, and Bash. See [installation details and requirements](docs/device-install.md).
+Installers default to the latest stable release and ask before changing an installed version. **Windows in-place upgrades are not yet supported.** Supported: Linux x86-64, macOS Intel/Apple Silicon, Windows x64/ARM64. Unix requires curl, Python 3, and Bash. Linux also needs usable user systemd or `crontab` with a running cron daemon (kept running by the container/OS). See [installation details and requirements](docs/device-install.md).
 
 ## Server and details
 
