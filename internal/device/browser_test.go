@@ -42,6 +42,9 @@ func TestBrowser(t *testing.T) {
 	if os.Getenv("DEVICE_COMPARE_UI") != "" {
 		script = "../../scripts/compare-device-ui.mjs"
 	}
+	if os.Getenv("DEVICE_ANALYSIS_UI") != "" {
+		script = "../../scripts/compare-device-analysis.mjs"
+	}
 	cmd := exec.Command("node", script)
 	cmd.Env = append(os.Environ(), "DEVICE_TEST_URL=http://"+s.Address(), "DEVICE_TEST_TOKEN="+s.admin, "DEVICE_TEST_PLAYWRIGHT="+module)
 	if output, err := cmd.CombinedOutput(); err != nil {

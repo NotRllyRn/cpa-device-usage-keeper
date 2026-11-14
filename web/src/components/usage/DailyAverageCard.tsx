@@ -13,7 +13,10 @@ interface DailyAverageMetrics {
   costAvailable: boolean;
 }
 
+export interface CostDisplay { label: string; value: string; hint?: string }
+
 interface DailyAverageCardProps {
+  costDisplay?: CostDisplay;
   usage: UsageOverviewPayload | null;
   loading: boolean;
   aggregateMode?: boolean;
@@ -66,7 +69,7 @@ export function buildDailyAverageMetrics(usage: UsageOverviewPayload | null): Da
   };
 }
 
-export function DailyAverageCard({ usage, loading, aggregateMode = false }: DailyAverageCardProps) {
+export function DailyAverageCard({ usage, loading, aggregateMode = false, costDisplay }: DailyAverageCardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => buildDailyAverageMetrics(usage), [usage]);
   const metricItems: DailyAverageMetricItem[] = [
@@ -86,11 +89,11 @@ export function DailyAverageCard({ usage, loading, aggregateMode = false }: Dail
     },
     {
       key: 'cost',
-      label: t('usage_stats.avg_cost'),
-      value: loading || !metrics ? '-' : aggregateMode && !metrics.costAvailable ? 'Unknown' : formatUsd(metrics.cost),
+      label: costDisplay?.label ?? t('usage_stats.avg_cost'),
+      value: loading || !metrics ? '-' : costDisplay?.value ?? (aggregateMode && !metrics.costAvailable ? 'Unknown' : formatUsd(metrics.cost)),
       icon: <IconDollarSign size={14} />,
       accent: '#f59e0b',
-      hint: metrics && !metrics.costAvailable ? t('usage_stats.cost_need_price') : undefined,
+      hint: loading ? undefined : costDisplay ? costDisplay.hint : metrics && !metrics.costAvailable ? t('usage_stats.cost_need_price') : undefined,
     },
   ];
 

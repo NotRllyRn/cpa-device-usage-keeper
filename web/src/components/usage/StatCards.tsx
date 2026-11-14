@@ -19,7 +19,7 @@ import {
 import { sparklineOptions } from '@/utils/usage/chartConfig';
 import type { UsageOverviewPayload, UsagePayload } from './hooks/useUsageData';
 import type { SparklineBundle } from './hooks/useSparklines';
-import { buildDailyAverageMetrics, DailyAverageCard } from './DailyAverageCard';
+import { buildDailyAverageMetrics, DailyAverageCard, type CostDisplay } from './DailyAverageCard';
 import styles from '@/pages/UsagePage.module.scss';
 
 interface StatCardData {
@@ -35,6 +35,8 @@ interface StatCardData {
 }
 
 export interface StatCardsProps {
+  costDisplay?: CostDisplay;
+  dailyAverageCostDisplay?: CostDisplay;
   aggregateMode?: boolean;
   usage: UsageOverviewPayload | null;
   loading: boolean;
@@ -121,6 +123,8 @@ export function StatCards({
   dailyAverageUsage,
   reserveDailyAverage,
   aggregateMode = false,
+  costDisplay,
+  dailyAverageCostDisplay,
   sparklines,
 }: StatCardsProps) {
   const { t } = useTranslation();
@@ -247,21 +251,21 @@ export function StatCards({
     },
     {
       key: 'cost',
-      label: t('usage_stats.total_cost'),
+      label: costDisplay?.label ?? t('usage_stats.total_cost'),
       icon: <IconDollarSign size={16} />,
       accent: '#f59e0b',
       accentSoft: 'rgba(245, 158, 11, 0.18)',
       accentBorder: 'rgba(245, 158, 11, 0.32)',
-      value: loading ? '-' : aggregateMode && !costAvailable ? `Known ${formatUsd(totalCost)}` : formatUsd(totalCost),
+      value: loading ? '-' : costDisplay?.value ?? (aggregateMode && !costAvailable ? `Known ${formatUsd(totalCost)}` : formatUsd(totalCost)),
       meta: (
         <>
           <span className={styles.statMetaItem}>
             {t('usage_stats.total_tokens')}:{' '}
             {loading ? '-' : formatCompactNumber(usageSnapshot?.total_tokens ?? 0)}
           </span>
-          {!costAvailable && (
+          {!loading && (costDisplay ? costDisplay.hint : !costAvailable) && (
             <span className={`${styles.statMetaItem} ${styles.statSubtle}`}>
-              {t('usage_stats.cost_need_price')}
+              {costDisplay ? costDisplay.hint : t('usage_stats.cost_need_price')}
             </span>
           )}
         </>
@@ -312,7 +316,7 @@ export function StatCards({
         className={`${styles.primaryStatsRow} ${dailyAverageExpanded ? styles.primaryStatsRowExpanded : ''} ${aggregateMode ? styles.aggregateStatsRow : ''}`.trim()}
       >
         <div className={styles.dailyAverageSlot} aria-hidden={!dailyAverageExpanded}>
-          <DailyAverageCard aggregateMode={aggregateMode} usage={dailyAverageUsage} loading={loading} />
+          <DailyAverageCard costDisplay={dailyAverageCostDisplay} aggregateMode={aggregateMode} usage={dailyAverageUsage} loading={loading} />
         </div>
         {primaryCards.map((card) => (
           <div key={card.key} className={styles.primaryStatSlot}>

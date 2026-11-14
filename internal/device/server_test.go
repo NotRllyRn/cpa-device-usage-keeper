@@ -53,6 +53,17 @@ func TestListenerAuthAndLifecycle(t *testing.T) {
 	if code, raw = call("POST", "/v1/snapshots", enrollment.Token, payload); code != 200 {
 		t.Fatalf("%d %s", code, raw)
 	}
+	for _, token := range []string{"", enrollment.Token} {
+		if code, _ = call("GET", "/v1/analysis", token, nil); code != 401 {
+			t.Fatal("analysis auth", code)
+		}
+	}
+	if code, raw = call("GET", "/v1/analysis?start=2026-01-02&end=2026-01-02", string(bytes.TrimSpace(admin)), nil); code != 200 {
+		t.Fatalf("analysis: %d %s", code, raw)
+	}
+	if code, _ = call("GET", "/v1/analysis?start=invalid", string(bytes.TrimSpace(admin)), nil); code != 400 {
+		t.Fatal(code)
+	}
 	if code, _ = call("POST", "/v1/snapshots", string(bytes.TrimSpace(admin)), payload); code != 401 {
 		t.Fatal("admin can upload")
 	}

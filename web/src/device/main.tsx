@@ -14,6 +14,10 @@ import type { UseModelPricingDataReturn } from '@/components/usage/hooks/useMode
 import type { ModelPricingConfig } from '@/lib/types';
 import { UsageComparisonCharts } from '@/components/usage/UsageComparisonCharts';
 import { TokenActivityCard } from '@/components/usage/TokenActivityCard';
+import { AnalysisPanel } from '@/components/usage/analysis/AnalysisPanel';
+import { analysisData } from './analysis';
+import { AnalysisDetails } from './AnalysisDetails';
+import { deviceCostDisplay } from './costs';
 import { StatCards } from '@/components/usage/StatCards';
 import { TimeRangeControl } from '@/components/usage/TimeRangeControl';
 import type { UsageTimeRange, UsageCustomRange } from '@/lib/types';
@@ -35,9 +39,9 @@ const emptyFilters: Filters = { device: '', agent: '', ...rangeDates('7d') };
 const message = (e: unknown) => e instanceof Error ? e.message : 'Request failed';
 const number = (n: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 const money = (n: number) => '$' + n.toFixed(6);
-type Tab = 'overview' | 'history' | 'devices' | 'settings';
+type Tab = 'overview' | 'analysis' | 'history' | 'devices' | 'settings';
 const tabs: { id: Tab; label: string; href: string }[] = [
-  { id: 'overview', label: 'Overview', href: '#overview' }, { id: 'history', label: 'Daily history', href: '#history' },
+  { id: 'overview', label: 'Overview', href: '#overview' }, { id: 'analysis', label: 'Analysis', href: '#analysis' }, { id: 'history', label: 'Daily history', href: '#history' },
   { id: 'devices', label: 'Devices', href: '#devices' }, { id: 'settings', label: 'Settings', href: '#settings' },
 ];
 function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) {
@@ -72,15 +76,15 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       setEmptyHistory(allTime && boundary!.earliest_day === null);
       if (allTime) setAllTimeRange({ unit: 'day', ...dates });
       validateDashboardRange(dates.start, dates.end);
-      const [data, list, configs] = await Promise.all([api.overview({ ...filters, ...dates }), api.devices(), api.prices()]);
+      const [data, list, configs] = await Promise.all([api.overview({ ...filters, ...dates }, tab === 'analysis'), api.devices(), api.prices()]);
       if (id !== request.current) return false;
       validateDashboardRange(dates.start, dates.end, data.models.length + data.devices.length);
       setOverview(data); setLoadedDates(dates); setDevices(list); setPrices(configs);
-      setModelOptions(old => [...new Set([...old, ...data.models.map(m => m.key), ...configs.map(p => p.model)])].sort());
+      setModelOptions(old => [...new Set([...old, ...data.models.map(m => m.key).filter(Boolean), ...configs.map(p => p.model)])].sort());
       return true;
     } catch (e) { if (id === request.current) { setError(message(e)); setOverview(null); } return false; }
     finally { if (id === request.current) setBusy(false); }
-  }, [api, filters, range, customRange, allTime]);
+  }, [api, filters, range, customRange, allTime, tab]);
   useEffect(() => {
     void refresh();
     // This is a monotonic request generation, not a DOM ref. Invalidate every
@@ -113,6 +117,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
     saveModel: async config => ({ result: { model: config.model, config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models', 'PUT', config)) }),
     deleteModel: async model => ({ result: { config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models?model=' + encodeURIComponent(model), 'DELETE')) }),
   };
+  const analysis = tab === 'analysis' && !busy && overview ? analysisData(overview, devices, loadedDates.start, loadedDates.end) : null;
   const dashboard = overview ? dashboardData(overview, devices, loadedDates.start, loadedDates.end) : null;
   const filter = (key: keyof Filters, value: string) => setFilters(old => ({ ...old, [key]: value }));
   return <div className={`${styles.pageShell} ${styles.standalone}`} data-keeper-page="usage"><div className={styles.pageFrame}>
@@ -128,11 +133,16 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       {allTime && emptyHistory && <p role="status" className="device-note">No usage history for these filters. All time shows today (UTC) until uploads arrive.</p>}
       <p className="device-note">{busy ? 'Loading complete range…' : overview ? `${overview.snapshots} daily snapshots${overview.snapshots ? ` · Latest collection ${new Date(overview.collected_at).toLocaleString()}` : ''} · Refresh to include new uploads.` : 'No data loaded'}</p>
       {tab === 'overview' && <>
-        <StatCards aggregateMode usage={dashboard?.usage ?? null} dailyAverageUsage={dashboard?.usage ?? null} reserveDailyAverage loading={busy} sparklines={{ requests: null, tokens: null, rpm: null, tpm: null, cacheReadRate: null, cost: null }} />
+        <StatCards costDisplay={overview ? deviceCostDisplay(overview) : undefined} dailyAverageCostDisplay={overview && dashboard ? deviceCostDisplay(overview, dashboard.calendarDays) : undefined} aggregateMode usage={dashboard?.usage ?? null} dailyAverageUsage={dashboard?.usage ?? null} reserveDailyAverage loading={busy} sparklines={{ requests: null, tokens: null, rpm: null, tpm: null, cacheReadRate: null, cost: null }} />
         <TokenActivityCard aggregateMode activity={dashboard?.activity ?? null} loading={busy} requestIdentity={JSON.stringify(filters)} />
         {dashboard && <details className="device-note device-coverage" data-device-coverage><summary>{dashboard.observedDays.toLocaleString()} of {dashboard.calendarDays.toLocaleString()} days have uploads · About gaps</summary><p>{dashboard.zeroDays} uploaded days report zero tokens. {(dashboard.calendarDays - dashboard.observedDays).toLocaleString()} days have no uploads, not confirmed zero usage. Gray activity cells can mean either; scroll the grid horizontally to reach later dates. Trends leave unreported days as gaps. Calendar-day averages include all selected days.</p></details>}
         <UsageComparisonCharts aggregateMode comparisons={dashboard?.comparisons} deviceComparisons={dashboard?.devices} observedBuckets={dashboard?.observedBuckets} formatBucketLabel={formatDeviceDay} loading={busy} isDark={isDark} isMobile={isMobile} />
         <section className={styles.statCard}><h2>Models</h2><p id="device-model-scroll" className="device-note">Scroll horizontally for all token and cost columns. Keyboard: focus the table region, then use ← / →.</p><div className="device-table" role="region" aria-label="Model usage, horizontally scrollable" aria-describedby="device-model-scroll" tabIndex={0}><table><thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.models.map(m => <tr key={m.key}><td>{m.key}</td><td>{number(m.tokens.input)}</td><td>{number(m.tokens.output)}</td><td>{number(m.tokens.cache_read)} / {number(m.tokens.cache_write)}</td><td>{m.complete ? money(m.known_cost) : `Unknown (known ${money(m.known_cost)})`}</td></tr>)}</tbody></table></div><p className="device-note">Unattributed or extra tokens remain in daily totals and are not assigned a fabricated model or cost.</p></section>
+      </>}
+      {tab === 'analysis' && <>
+        <details className="device-note device-coverage"><summary>Daily token and cost analysis · About coverage</summary><p>Only uploaded dates are charted; gaps are not confirmed zero usage. The average is per uploaded day. Unknown costs show known subtotals, not free usage; incomplete days have no cost line point. Unattributed includes tokens without a model or category. Select a narrower range if analysis exceeds 100 models/devices or 100,000 chart points.</p><p>Not available from daily reports: latency diagnostics, model speed, request-based model efficiency, credentials and provider composition.</p></details>
+        <AnalysisPanel costDisplay={overview ? deviceCostDisplay(overview) : undefined} key={JSON.stringify([filters, range, customRange, allTime])} aggregateMode compositionDimensions={['api_key', 'model']} analysis={analysis} deviceUsage={analysis?.device_usage} loading={busy} isDark={isDark} isMobile={isMobile} />
+        {!busy && overview && <AnalysisDetails data={overview} devices={devices} />}
       </>}
       {tab === 'history' && <section className={styles.statCard}><h2>Daily history</h2><div className="device-table"><table><thead><tr><th>UTC day</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.days.map(d => <tr key={d.key}><td>{d.key}</td><td>{number(d.total_tokens)}</td><td>{number(d.tokens.input)}</td><td>{number(d.tokens.output)}</td><td>{number(d.tokens.cache_read)} / {number(d.tokens.cache_write)}</td><td>{d.complete ? money(d.known_cost) : `Incomplete: ${money(d.known_cost)}`}</td></tr>)}</tbody></table></div></section>}
       {tab === 'devices' && <section className={styles.statCard}><h2>Devices</h2><form onSubmit={e => { e.preventDefault(); void mutate(async () => { const result = await api.request<{ token: string }>('/devices', 'POST', { name }); setEnrollment(result.token); setName(''); }).catch(e => setError(message(e))); }}><label>Device name <input required pattern="[a-zA-Z0-9][a-zA-Z0-9._:+\-]{0,159}" value={name} onChange={e => setName(e.target.value)} /></label><Button type="submit" disabled={busy}>Enroll</Button></form>

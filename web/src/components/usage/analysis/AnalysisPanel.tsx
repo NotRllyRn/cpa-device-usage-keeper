@@ -17,8 +17,13 @@ import styles from './AnalysisPanel.module.scss';
 import { AnalysisModelSpeedCard } from '../model-speed/AnalysisModelSpeedCard';
 import type { ModelSpeedRefreshSignal } from '../model-speed/modelSpeedAnimation';
 import { LatencyScatterChart } from '../LatencyScatterChart';
+import { AnalysisAggregateContext, useAnalysisAggregate } from './aggregateMode';
+import type { CostDisplay } from '../DailyAverageCard';
 
 interface AnalysisPanelProps {
+  aggregateMode?: boolean;
+  costDisplay?: CostDisplay;
+  deviceUsage?: AnalysisModelUsagePayload;
   analysis: AnalysisResponse | null;
   loading: boolean;
   latencyDiagnostics?: AnalysisLatencyDiagnostics | null;
@@ -505,6 +510,7 @@ function buildTopModelsViewModel(
       share: rangeTotal > 0 ? (item.total / rangeTotal) * 100 : 0,
       requests: details ? toNumber(details.requests) : requestsByModel.get(item.model) ?? 0,
       cost: details && details.cost_available !== false ? toNumber(details.cost_usd) : null,
+      knownCost: details ? toNumber(details.cost_usd) : 0,
       inputTokens: details ? toNumber(details.input_tokens) : null,
       cacheReadTokens: details ? toNumber(details.cache_read_tokens) : null,
       color: getAnalysisRankingColor(`model:${item.model}`, index, TOP_MODEL_COLORS),
@@ -894,8 +900,9 @@ function buildCompositionChartOptions(chartTheme: ChartTheme, labels: Compositio
 }
 
 // 总费用读取接口已存汇总；每百万 Token 成本沿用当前图表的 Token 分母，不重新匹配单价。
-function TokenUsageChart({ rows, summary, loading, isDark, isMobile }: { rows: ChartRow[]; summary: AnalysisCostSummary | undefined; loading: boolean; isDark: boolean; isMobile: boolean }) {
+function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay }: { costDisplay?: CostDisplay; rows: ChartRow[]; summary: AnalysisCostSummary | undefined; loading: boolean; isDark: boolean; isMobile: boolean }) {
   const { t } = useTranslation();
+  const aggregateMode = useAnalysisAggregate();
   const tokenLabels = useMemo(() => ({
     input: t('usage_stats.input_tokens'),
     output: t('usage_stats.output_tokens'),
@@ -909,15 +916,25 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile }: { rows: C
   }), [t]);
   const chartTheme = useMemo(() => getChartTheme(isDark), [isDark]);
   const averageTokenTotal = useMemo(() => calculateAverageTotalTokens(rows), [rows]);
-  const chartData = useMemo(() => buildAnalysisTokenChartData(rows, tokenLabels), [rows, tokenLabels]);
-  const chartOptions = useMemo(() => buildAnalysisTokenChartOptions({
-    chartTheme,
-    isMobile,
-    totalTokens: rows.map((row) => row.total),
-    totalLabel: tokenLabels.total,
-    averageTokenTotal,
-  }), [averageTokenTotal, chartTheme, isMobile, rows, tokenLabels.total]);
-  const legendItems = useMemo(() => buildTokenLegendItems(tokenLabels, averageTokenTotal, chartTheme.averageLine), [averageTokenTotal, chartTheme.averageLine, tokenLabels]);
+  const chartData = useMemo(() => {
+    const data = buildAnalysisTokenChartData(rows, tokenLabels);
+    if (!aggregateMode) return data;
+    data.datasets = data.datasets.filter(dataset => dataset.yAxisID !== 'requests' && dataset.label !== tokenLabels.reasoning);
+    data.datasets[0] = { ...data.datasets[0], tooltipData: rows.map(row => row.input) } as TokenTooltipDataset;
+    const cost = data.datasets.find(dataset => dataset.yAxisID === 'cost');
+    if (cost) cost.data = rows.map(row => row.costAvailable ? row.cost : null);
+    data.datasets.push({ label: 'Unattributed', data: rows.map(row => Math.max(0, row.total - row.input - row.output - row.cacheRead - row.cacheWrite)), backgroundColor: '#94a3b8', stack: 'tokens', yAxisID: 'tokens' });
+    return data;
+  }, [aggregateMode, rows, tokenLabels]);
+  const chartOptions = useMemo(() => {
+    const options = buildAnalysisTokenChartOptions({ chartTheme, isMobile, totalTokens: rows.map(row => row.total), totalLabel: tokenLabels.total, averageTokenTotal });
+    if (aggregateMode && options.scales?.requests) options.scales.requests.display = false;
+    return options;
+  }, [aggregateMode, averageTokenTotal, chartTheme, isMobile, rows, tokenLabels.total]);
+  const legendItems = useMemo(() => {
+    const items = buildTokenLegendItems(tokenLabels, averageTokenTotal, chartTheme.averageLine);
+    return aggregateMode ? [...items.filter(item => item.label !== tokenLabels.requests && item.label !== tokenLabels.reasoning), { label: 'Unattributed', color: '#94a3b8' }] : items;
+  }, [aggregateMode, averageTokenTotal, chartTheme.averageLine, tokenLabels]);
   const hasUnavailableCost = summary?.cost_available === false || rows.some((row) => !row.costAvailable);
   const totalTokens = rows.reduce((sum, row) => sum + row.total, 0);
   const totalCost = toNumber(summary?.total_cost_usd);
@@ -926,7 +943,7 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile }: { rows: C
       <AnalysisCardHeader
         title={t('usage_stats.analysis_token_usage_title')}
         showPricingHint={hasUnavailableCost}
-        hint={t('usage_stats.cost_need_price')}
+        hint={aggregateMode ? costDisplay?.hint ?? 'Some costs are unknown; known subtotals only.' : t('usage_stats.cost_need_price')}
       />
       {!loading && (rows.length > 0 || totalCost > 0) && (
         <dl className={styles.analysisSummary}>
@@ -935,12 +952,12 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile }: { rows: C
             <dd>{formatCompactNumber(totalTokens)}</dd>
           </div>
           <div>
-            <dt>{t('usage_stats.total_cost')}</dt>
-            <dd>{formatUsd(totalCost)}</dd>
+            <dt>{costDisplay?.label ?? t('usage_stats.total_cost')}</dt>
+            <dd>{costDisplay?.value ?? (aggregateMode && hasUnavailableCost ? `Unknown (known ${formatUsd(totalCost)})` : formatUsd(totalCost))}</dd>
           </div>
           <div>
             <dt>{t('usage_stats.analysis_cost_per_million_tokens')}</dt>
-            <dd title={t('usage_stats.analysis_blended_rate')}>{formatUsd(getCostRatePerMillion(totalCost, totalTokens))}</dd>
+            <dd title={t('usage_stats.analysis_blended_rate')}>{aggregateMode && hasUnavailableCost ? 'Unknown' : formatUsd(getCostRatePerMillion(totalCost, totalTokens))}</dd>
           </div>
         </dl>
       )}
@@ -967,7 +984,9 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile }: { rows: C
   );
 }
 
-function TopModelsCard({ modelUsage, composition, granularity, timezone, loading, isDark, isMobile, windowMinutes }: {
+function TopModelsCard({ modelUsage, composition, deviceUsage, deviceComposition, granularity, timezone, loading, isDark, isMobile, windowMinutes }: {
+  deviceUsage?: AnalysisModelUsagePayload;
+  deviceComposition?: AnalysisCompositionItem[];
   modelUsage: AnalysisModelUsagePayload | undefined;
   composition: AnalysisCompositionItem[];
   granularity: AnalysisResponse['granularity'];
@@ -978,9 +997,11 @@ function TopModelsCard({ modelUsage, composition, granularity, timezone, loading
   windowMinutes: number | null;
 }) {
   const { t } = useTranslation();
-  const highlight = useAnalysisHighlight('models');
+  const [dimension, setDimension] = useState<'model' | 'device'>('model');
+  const showingDevices = Boolean(deviceUsage) && dimension === 'device';
+  const highlight = useAnalysisHighlight(showingDevices ? 'device-trends' : 'models');
   const chartTheme = useMemo(() => getChartTheme(isDark), [isDark]);
-  const view = useMemo(() => buildTopModelsViewModel(modelUsage, granularity, timezone, composition), [composition, granularity, modelUsage, timezone]);
+  const view = useMemo(() => buildTopModelsViewModel(showingDevices ? deviceUsage : modelUsage, granularity, timezone, showingDevices ? deviceComposition ?? [] : composition), [composition, deviceComposition, deviceUsage, showingDevices, granularity, modelUsage, timezone]);
   const activeHighlightedModel = view.series.some((item) => item.key === highlight.active) ? highlight.active : null;
   const chartData = useMemo(() => buildTopModelsChartData(view, activeHighlightedModel), [activeHighlightedModel, view]);
   const { external, onPointerDown, onPointerMove, tooltip } = useTopModelsTooltip(chartData, !loading, isMobile, chartTheme);
@@ -989,16 +1010,19 @@ function TopModelsCard({ modelUsage, composition, granularity, timezone, loading
   }), [chartTheme, external, isMobile, t, view.bucketTotals]);
 
   return (
-    <section className={`${styles.analysisCard} ${styles.pairedChartCard} ${styles.topModelsCard} keeper-card-surface`}>
-      <AnalysisCardHeader title={t('usage_stats.analysis_top_models_title')} showPricingHint={false} hint="" />
+    <section className={`${styles.analysisCard} ${styles.pairedChartCard} ${deviceUsage ? '' : styles.topModelsCard} keeper-card-surface`}>
+      <AnalysisCardHeader title={showingDevices ? 'Top Devices' : t('usage_stats.analysis_top_models_title')} showPricingHint={false} hint="" />
+      {deviceUsage && <div className={styles.pairedChartToolbar}><div className={styles.compositionTabs} role="tablist" aria-label="Trend dimension">
+        {(['model', 'device'] as const).map(value => <button key={value} type="button" role="tab" aria-selected={dimension === value} className={`${styles.compositionTab} ${dimension === value ? styles.compositionTabActive : ''}`} onClick={() => setDimension(value)}>{value === 'model' ? 'Model' : 'Device'}</button>)}
+      </div></div>}
       {loading ? <div className={styles.emptyState}>{t('common.loading')}</div> : view.series.length === 0 ? <div className={styles.emptyState}>{t('usage_stats.no_data')}</div> : (
         <>
           <div className={styles.analysisChartSurface}>
-            <div className={styles.pairedChartFrame} role="img" onPointerDown={onPointerDown} onPointerMove={onPointerMove} aria-label={`${t('usage_stats.analysis_top_models_chart_aria')}: ${formatCompactNumber(view.rangeTotal)}`}>
+            <div className={styles.pairedChartFrame} role="img" onPointerDown={onPointerDown} onPointerMove={onPointerMove} aria-label={`${showingDevices ? 'Device token trends' : t('usage_stats.analysis_top_models_chart_aria')}: ${formatCompactNumber(view.rangeTotal)}`}>
               <Bar data={chartData} options={chartOptions} />
             </div>
           </div>
-          <AnalysisRankingList items={view.series} label={t('usage_stats.analysis_top_models_ranking_aria')} windowMinutes={windowMinutes} highlight={highlight} />
+          <AnalysisRankingList items={view.series} label={showingDevices ? 'Device ranking' : t('usage_stats.analysis_top_models_ranking_aria')} windowMinutes={windowMinutes} highlight={highlight} />
           {tooltip}
         </>
       )}
@@ -1080,13 +1104,14 @@ type CompositionTab = {
 
 function CompositionPanel({ tabs, loading, isDark, windowMinutes }: { tabs: CompositionTab[]; loading: boolean; isDark: boolean; windowMinutes: number | null }) {
   const { t } = useTranslation();
+  const aggregateMode = useAnalysisAggregate();
   const [activeTabId, setActiveTabId] = useState<CompositionTab['id']>(tabs[0]?.id ?? 'model');
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const items = activeTab?.items ?? EMPTY_COMPOSITION_ITEMS;
   const highlight = useAnalysisHighlight(activeTab?.id ?? 'empty');
   const rankingItems = useMemo<AnalysisRankingItem[]>(() => items.map((item, index) => ({
     key: item.key, label: item.label, total: toNumber(item.total_tokens), share: toNumber(item.percent),
-    requests: toNumber(item.requests), cost: item.cost_available === false ? null : toNumber(item.cost_usd),
+    requests: toNumber(item.requests), cost: item.cost_available === false ? null : toNumber(item.cost_usd), knownCost: toNumber(item.cost_usd),
     inputTokens: toNumber(item.input_tokens), cacheReadTokens: toNumber(item.cache_read_tokens),
     color: getAnalysisRankingColor(`${activeTab?.id}:${item.key}`, index, CHART_COLORS),
   })), [activeTab?.id, items]);
@@ -1128,7 +1153,7 @@ function CompositionPanel({ tabs, loading, isDark, windowMinutes }: { tabs: Comp
   return (
     <section className={`${styles.analysisCard} ${styles.pairedChartCard} keeper-card-surface`}>
       <AnalysisCardHeader title={t('usage_stats.analysis_composition_title')}
-        showPricingHint={hasUnavailableCost} hint={t('usage_stats.cost_need_price')} />
+        showPricingHint={hasUnavailableCost} hint={aggregateMode ? 'Some costs are unknown; known subtotals only.' : t('usage_stats.cost_need_price')} />
       <div className={styles.pairedChartToolbar}>
         <div className={styles.compositionTabs} role="tablist" aria-label={t('usage_stats.analysis_composition_title')}>
           {tabs.map((tab) => (
@@ -1440,6 +1465,9 @@ function ModelEfficiencyCard({ rows, loading, isDark, isMobile }: { rows: Analys
 
 function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { cells: AnalysisHeatmapCell[]; apiKeys: string[]; apiKeyLabels: Record<string, string>; models: string[]; loading: boolean; isDark: boolean }) {
   const { t } = useTranslation();
+  const aggregateMode = useAnalysisAggregate();
+  const dimensionLabel = aggregateMode ? 'Device' : t('usage_stats.analysis_heatmap_api_key');
+  const displayCost = (cost: number, available: boolean) => aggregateMode && !available ? `Unknown (known ${formatUsd(cost)})` : formatUsd(cost);
   const [tooltip, setTooltip] = useState<FloatingTooltipState | null>(null);
   const cellMap = useMemo(() => new Map(cells.map((cell) => [`${cell.api_key}\0${cell.model}`, cell])), [cells]);
   // 固定汇总列按 API Key 聚合所有模型，确保与中间热力单元格使用同一数据口径。
@@ -1479,14 +1507,14 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
     const cost = toNumber(cell?.cost_usd);
     return [
       `${getAPIKeyLabel(apiKey)} / ${model}`,
-      `${t('usage_stats.requests_count')}: ${formatCompactNumber(requests)}`,
-      `${t('usage_stats.input_tokens')}: ${formatCompactNumber(input)}`,
+      ...(!aggregateMode ? [`${t('usage_stats.requests_count')}: ${formatCompactNumber(requests)}`] : []),
+      `${t('usage_stats.input_tokens')}: ${formatCompactNumber(aggregateMode ? Math.max(0, input-cacheRead-cacheWrite) : input)}`,
       `${t('usage_stats.output_tokens')}: ${formatCompactNumber(output)}`,
-      `${t('usage_stats.reasoning_tokens')}: ${formatCompactNumber(reasoning)}`,
+      ...(!aggregateMode ? [`${t('usage_stats.reasoning_tokens')}: ${formatCompactNumber(reasoning)}`] : []),
       `${t('usage_stats.cache_read_tokens')}: ${formatCompactNumber(cacheRead)}`,
       `${t('usage_stats.cache_creation_tokens')}: ${formatCompactNumber(cacheWrite)}`,
       `${t('usage_stats.total_tokens')}: ${formatCompactNumber(total)}`,
-      `${t('usage_stats.total_cost')}: ${formatUsd(cost)}`,
+      `${t('usage_stats.total_cost')}: ${displayCost(cost, cell?.cost_available !== false)}`,
     ];
   };
   const showTooltip = (
@@ -1510,9 +1538,9 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
   return (
     <section className={`${styles.analysisCard} ${styles.heatmapCard} keeper-card-surface ${isDark ? styles.heatmapCardDark : styles.heatmapCardLight}`}>
       <AnalysisCardHeader
-        title={t('usage_stats.analysis_heatmap_title')}
+        title={aggregateMode ? 'Device × Model' : t('usage_stats.analysis_heatmap_title')}
         showPricingHint={hasUnavailableCost}
-        hint={t('usage_stats.cost_need_price')}
+        hint={aggregateMode ? 'Some costs are unknown; known subtotals only.' : t('usage_stats.cost_need_price')}
       />
       {loading ? (
         <div className={styles.emptyState}>{t('common.loading')}</div>
@@ -1529,7 +1557,7 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
                   minWidth: heatmapGridMinWidth,
                 } as CSSProperties}
               >
-                <div className={`${styles.heatmapCorner} ${styles.heatmapKeyColumn}`}>{t('usage_stats.analysis_heatmap_api_key')}</div>
+                <div className={`${styles.heatmapCorner} ${styles.heatmapKeyColumn}`}>{dimensionLabel}</div>
                 {models.map((model) => (
                   <div
                     key={model}
@@ -1556,8 +1584,8 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
                   const apiKeyLabel = getAPIKeyLabel(apiKey);
                   const rowTotal = rowTotals.get(apiKey) ?? { totalTokens: 0, totalCost: 0, costAvailable: true };
                   const formattedTotalTokens = formatCompactNumber(rowTotal.totalTokens);
-                  const formattedTotalCost = formatUsd(rowTotal.totalCost);
-                  const apiKeyColumnLabel = t('usage_stats.analysis_heatmap_api_key');
+                  const formattedTotalCost = displayCost(rowTotal.totalCost, rowTotal.costAvailable);
+                  const apiKeyColumnLabel = dimensionLabel;
                   const summaryTooltipLines = [
                     apiKeyLabel,
                     `${t('usage_stats.total_tokens')}: ${formattedTotalTokens}`,
@@ -1667,6 +1695,9 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
 }
 
 export function AnalysisPanel({
+  aggregateMode = false,
+  costDisplay,
+  deviceUsage,
   analysis,
   loading,
   latencyDiagnostics,
@@ -1690,21 +1721,24 @@ export function AnalysisPanel({
   const analysisWindowMinutes = useMemo(() => calculateAnalysisWindowMinutes(analysis), [analysis]);
   const compositionTabs = useMemo<CompositionTab[]>(() => {
     const tabs: Record<AnalysisCompositionDimension, CompositionTab> = {
-      api_key: { id: 'api_key', label: t('usage_stats.analysis_composition_api_key_tab'), items: apiComposition },
+      api_key: { id: 'api_key', label: aggregateMode ? 'Device' : t('usage_stats.analysis_composition_api_key_tab'), items: apiComposition },
       model: { id: 'model', label: t('usage_stats.analysis_composition_model_tab'), items: modelComposition },
       credentials: { id: 'credentials', label: t('usage_stats.analysis_composition_credentials_tab'), items: credentialsComposition },
       ai_provider: { id: 'ai_provider', label: t('usage_stats.analysis_composition_ai_provider_tab'), items: aiProviderComposition },
     };
     return compositionDimensions.map((dimension) => tabs[dimension]);
-  }, [apiComposition, modelComposition, credentialsComposition, aiProviderComposition, compositionDimensions, t]);
+  }, [aggregateMode, apiComposition, modelComposition, credentialsComposition, aiProviderComposition, compositionDimensions, t]);
 
   return (
+    <AnalysisAggregateContext.Provider value={aggregateMode}>
     <ChartLifecycleProvider queryKey={modelSpeedQueryKey} source={analysis} refreshSignal={chartRefreshSignal}>
     <div className={styles.analysisPanel}>
-      <TokenUsageChart rows={tokenRows} summary={analysis?.cost_summary} loading={loading} isDark={isDark} isMobile={isMobile} />
+      <TokenUsageChart costDisplay={costDisplay} rows={tokenRows} summary={analysis?.cost_summary} loading={loading} isDark={isDark} isMobile={isMobile} />
       <div className={styles.insightGrid}>
         <CompositionPanel tabs={compositionTabs} loading={loading} isDark={isDark} windowMinutes={analysisWindowMinutes} />
         <TopModelsCard
+          deviceUsage={deviceUsage}
+          deviceComposition={analysis?.api_key_composition}
           modelUsage={analysis?.model_usage}
           composition={modelComposition}
           windowMinutes={analysisWindowMinutes}
@@ -1715,15 +1749,17 @@ export function AnalysisPanel({
           isMobile={isMobile}
         />
       </div>
-      <ChartLifecycleProvider queryKey={modelSpeedQueryKey} source={latencyDiagnostics} refreshSignal={latencyRefreshSignal}>
+      {!aggregateMode && <><ChartLifecycleProvider queryKey={modelSpeedQueryKey} source={latencyDiagnostics} refreshSignal={latencyRefreshSignal}>
         <LatencyDiagnosticsCard diagnostics={latencyDiagnostics} loading={latencyLoading} error={latencyError} isDark={isDark} isMobile={isMobile} />
       </ChartLifecycleProvider>
       <div className={styles.insightGrid}>
         <AnalysisModelSpeedCard speed={analysis?.model_speed} granularity={analysis?.granularity ?? 'hourly'} loading={loading} isDark={isDark} isMobile={isMobile} timezone={analysis?.timezone} preferenceScope={modelSpeedPreferenceScope} queryKey={modelSpeedQueryKey} refreshSignal={modelSpeedRefreshSignal} />
         <ModelEfficiencyCard rows={analysis?.model_efficiency ?? []} loading={loading} isDark={isDark} isMobile={isMobile} />
       </div>
+      </>}
       <Heatmap cells={analysis?.heatmap?.cells ?? []} apiKeys={analysis?.heatmap?.api_keys ?? []} apiKeyLabels={analysis?.heatmap?.api_key_labels ?? {}} models={analysis?.heatmap?.models ?? []} loading={loading} isDark={isDark} />
     </div>
     </ChartLifecycleProvider>
+    </AnalysisAggregateContext.Provider>
   );
 }

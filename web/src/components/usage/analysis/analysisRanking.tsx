@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { calculateCacheReadRate, formatCompactNumber, formatPerMinuteValue, formatUsd } from '@/utils/usage';
 import type { UsageChartGradientColor } from '@/utils/usage/chartConfig';
 import styles from './AnalysisPanel.module.scss';
+import { useAnalysisAggregate } from './aggregateMode';
 
 export type AnalysisRankingItem = {
   key: string;
@@ -11,6 +12,7 @@ export type AnalysisRankingItem = {
   share: number;
   requests: number;
   cost: number | null;
+  knownCost?: number;
   inputTokens: number | null;
   cacheReadTokens: number | null;
   color: UsageChartGradientColor;
@@ -68,6 +70,7 @@ export function AnalysisRankingList({ items, label, windowMinutes, highlight }: 
   highlight: ReturnType<typeof useAnalysisHighlight>;
 }) {
   const { t } = useTranslation();
+  const aggregateMode = useAnalysisAggregate();
   const active = items.some((item) => item.key === highlight.active) ? highlight.active : null;
   const rate = (value: number) => windowMinutes && windowMinutes > 0 ? formatPerMinuteValue(value / windowMinutes) : '--';
   return (
@@ -93,10 +96,10 @@ export function AnalysisRankingList({ items, label, windowMinutes, highlight }: 
               <span className={styles.rankingTrack} aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, item.share))}%` }} /></span>
               <span className={styles.rankingMetrics}>
                 <span data-metric="cache" className={styles.rankingCache}>{t('usage_stats.cache_rate')} <strong>{cacheRate === null ? '--' : `${cacheRate.toFixed(2)}%`}</strong></span>
-                <span>{t('usage_stats.requests_count')} <strong>{formatCompactNumber(item.requests)}</strong></span>
-                <span>{t('usage_stats.total_cost')} <strong>{item.cost === null ? '--' : formatUsd(item.cost)}</strong></span>
-                <span>{t('usage_stats.rpm')} <strong>{rate(item.requests)}</strong></span>
-                <span>{t('usage_stats.tpm')} <strong>{rate(item.total)}</strong></span>
+                {!aggregateMode && <span>{t('usage_stats.requests_count')} <strong>{formatCompactNumber(item.requests)}</strong></span>}
+                <span>{t('usage_stats.total_cost')} <strong>{item.cost === null ? aggregateMode ? `Unknown (known ${formatUsd(item.knownCost ?? 0)})` : '--' : formatUsd(item.cost)}</strong></span>
+                {!aggregateMode && <><span>{t('usage_stats.rpm')} <strong>{rate(item.requests)}</strong></span>
+                <span>{t('usage_stats.tpm')} <strong>{rate(item.total)}</strong></span></>}
               </span>
             </button>
           </li>

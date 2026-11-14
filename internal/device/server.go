@@ -250,7 +250,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonReply(w, 200, map[string]any{"earliest_day": day})
-	case r.Method == "GET" && r.URL.Path == "/v1/overview":
+	case r.Method == "GET" && (r.URL.Path == "/v1/overview" || r.URL.Path == "/v1/analysis"):
 		q := r.URL.Query()
 		for _, key := range []string{"start", "end"} {
 			if value := q.Get(key); value != "" {
@@ -264,9 +264,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "invalid filters")
 			return
 		}
-		overview, err := s.store.Overview(r.Context(), q.Get("device"), q.Get("agent"), q.Get("start"), q.Get("end"))
+		read := s.store.Overview
+		if r.URL.Path == "/v1/analysis" {
+			read = s.store.Analysis
+		}
+		overview, err := read(r.Context(), q.Get("device"), q.Get("agent"), q.Get("start"), q.Get("end"))
 		if err != nil {
-			fail(w, 503, "overview unavailable; narrow the range or retry")
+			fail(w, 503, strings.TrimPrefix(r.URL.Path, "/v1/")+" unavailable; narrow the range or retry")
 			return
 		}
 		jsonReply(w, 200, overview)

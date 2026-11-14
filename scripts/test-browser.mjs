@@ -28,7 +28,8 @@ try {
   await page.unroute('**/v1/session');
   assert.equal(await page.getByLabel('Admin token').count(),0);
   assert.equal(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage})).then(text=>text.includes(process.env.DEVICE_TEST_TOKEN)),false);
-  assert.match(await page.locator('body').innerText(), /Known/);
+  assert.match(await page.locator('body').innerText(), /Unknown/);
+  assert.doesNotMatch(await page.locator('body').innerText(), /Set pricing to calculate cost|Known \$/);
   assert.match(await page.locator('body').innerText(), /Unavailable/);
   // Keeper toolbar starts collapsed. Open its page selector to navigate.
   async function navigate(label) {
@@ -37,6 +38,10 @@ try {
     await page.locator('[data-dashboard-page-trigger]').click();
     await page.getByRole('menuitem', { name: label, exact: true }).click();
   }
+  await navigate('Analysis');
+  await page.getByRole('heading', { name: 'Token Usage Over Time' }).waitFor();
+  await page.getByRole('region', { name: 'Token and cost breakdown', exact: true }).getByText('model-test', { exact: true }).waitFor();
+  assert.match(await page.getByRole('region', { name: 'Token and cost breakdown', exact: true }).innerText(), /130/);
   await navigate('Settings');
   await page.getByRole('heading', { name: /Model Pric/i }).waitFor();
   assert.equal(await page.getByRole('button', { name: /Sync Prices/i }).isDisabled(), false);

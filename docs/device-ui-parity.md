@@ -41,6 +41,38 @@ usage aggregation. Shared-view input includes cache reads/writes for correct
 cache percentages; the model table retains exclusive input counts. Relative
 ranges resolve at every refresh and login; custom dates remain fixed.
 
+## Analysis
+
+Analysis imports Keeper's `AnalysisPanel`, chart builders, ranking/selection,
+composition and heatmap directly. Its optional aggregate mode hides requests,
+reasoning, RPM/TPM, latency, model speed and request-based efficiency; it relabels
+API Key as Device and offers model/device trend selection. Credentials and
+provider composition are omitted because uploads have neither dimension.
+The device-only breakdown table exposes exclusive input, output, cache read,
+cache write, unattributed category tokens, total tokens and estimated cost.
+
+`GET /v1/analysis` uses the same session authentication, filters, consistent
+SQLite snapshot and Keeper pricing as Overview, adding a device/model matrix.
+Unassigned tokens receive an explicit unattributed row, never an invented model.
+Only uploaded dates appear in Analysis charts; the chart average is per uploaded
+day, unlike Overview's selected-calendar-day average. No hourly samples or
+request totals are inferred. Fixed prices and Pi fallback are supported;
+conditional prices still require unavailable request details.
+
+Both aggregates return priced/missing/conditional model-day entry counts and
+unattributed token counts. Overview and Analysis display a normal-sized amount
+under **Estimated cost** or **Partial cost subtotal**, with missing reasons.
+Overview's daily average divides that same subtotal by selected calendar days,
+explicitly labeling partial coverage. All-unknown costs remain unknown; explicit
+free rates remain zero; no uploads remain empty. Incomplete daily costs are gaps
+in the cost line, not zero-cost points. Shared upstream defaults are unchanged.
+
+The query rejects more than 100,000 snapshots or 256 MiB of snapshot payloads,
+with an eight-second deadline and existing 100,000 breakdown-cell limit.
+Analysis additionally rejects more than 100 models/devices or 100,000 dense
+chart points. The browser retains the 3,660-day limit. Limits return errors,
+never silently clipped totals; filter by device/agent or shorten the range.
+
 ## Reproduce local checks
 
 ```sh
@@ -65,6 +97,14 @@ empty history, explicit range rejection and mobile overflow. Screenshot output
 also includes mobile menus and multi-year custom panels in both themes.
 The regular browser test exercises authenticated storage, editing and sync apply.
 No production data or live catalog is used in these browser fixtures.
+
+Use `DEVICE_ANALYSIS_UI=1` instead of `DEVICE_COMPARE_UI` for matching synthetic
+Analysis fixtures in both compiled entry points, at 1440×1000 and 390×1000 in
+light and dark themes. Output defaults to `/tmp/device-analysis-parity`.
+This checks composition/ranking selection, model/device trends and tables,
+device/agent/date/all-time filters, zero/empty states, partial/unknown/complete
+cost presentation and mobile overflow. Upstream-only unsupported sections remain
+visible in upstream screenshots and are intentionally absent in device views.
 
 These tests do not establish deployed CPA plugin compatibility or replace native
 host lifecycle checks before deployment. No production deployment is performed.

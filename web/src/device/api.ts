@@ -1,7 +1,7 @@
 import type { ModelPricingConfig } from '@/lib/types';
 export interface Tokens { input: number; output: number; cache_read: number; cache_write: number }
-export interface Aggregate { key: string; tokens: Tokens; total_tokens: number; known_cost: number; complete: boolean }
-export interface Overview { breakdown: { day: string; models: Aggregate[]; devices: Aggregate[] }[]; total: Aggregate; days: Aggregate[]; models: Aggregate[]; devices: Aggregate[]; agents: string[]; collected_at: string; snapshots: number }
+export interface Aggregate { coverage?: { priced: number; missing: number; conditional: number; unattributed_tokens: number }; key: string; tokens: Tokens; total_tokens: number; known_cost: number; complete: boolean }
+export interface Overview { cells?: (Aggregate & { device: string; model: string })[]; breakdown: { day: string; models: Aggregate[]; devices: Aggregate[] }[]; total: Aggregate; days: Aggregate[]; models: Aggregate[]; devices: Aggregate[]; agents: string[]; collected_at: string; snapshots: number }
 export interface Device { id: string; name: string; revoked: boolean; last_seen: string | null }
 export interface Filters { device: string; agent: string; start: string; end: string }
 export class DeviceAPIError extends Error {
@@ -22,8 +22,8 @@ export class DeviceAPI {
     this.controller.signal.throwIfAborted();
     return value as T;
   }
-  async overview(filters: Filters) {
-    const data = await this.request<Overview>('/overview?' + new URLSearchParams({ ...filters }));
+  async overview(filters: Filters, analysis = false) {
+    const data = await this.request<Overview>((analysis ? '/analysis?' : '/overview?') + new URLSearchParams({ ...filters }));
     return { ...data, days: data.days ?? [], models: data.models ?? [], devices: data.devices ?? [], agents: data.agents ?? [], breakdown: data.breakdown ?? [] };
   }
   boundary({ device, agent }: Pick<Filters, 'device' | 'agent'>) { return this.request<{ earliest_day: string | null }>('/usage-boundary?' + new URLSearchParams({ device, agent })); }

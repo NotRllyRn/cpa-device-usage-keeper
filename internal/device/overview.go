@@ -12,19 +12,41 @@ import (
 
 // Aggregate contains no request counters or performance measurements. Costs are
 // known subtotals; Complete must be true before presenting them as full costs.
+type CostCoverage struct {
+	Priced       int   `json:"priced"`
+	Missing      int   `json:"missing"`
+	Conditional  int   `json:"conditional"`
+	Unattributed int64 `json:"unattributed_tokens"`
+}
+
+func (a *CostCoverage) add(b CostCoverage) {
+	a.Priced += b.Priced
+	a.Missing += b.Missing
+	a.Conditional += b.Conditional
+	a.Unattributed += b.Unattributed
+}
+
 type Aggregate struct {
-	Key      string  `json:"key"`
-	Tokens   Tokens  `json:"tokens"`
-	Total    int64   `json:"total_tokens"`
-	Cost     float64 `json:"known_cost"`
-	Complete bool    `json:"complete"`
+	Coverage CostCoverage `json:"coverage"`
+	Key      string       `json:"key"`
+	Tokens   Tokens       `json:"tokens"`
+	Total    int64        `json:"total_tokens"`
+	Cost     float64      `json:"known_cost"`
+	Complete bool         `json:"complete"`
 }
 type DailyBreakdown struct {
 	Day     string      `json:"day"`
 	Models  []Aggregate `json:"models"`
 	Devices []Aggregate `json:"devices"`
 }
+type AnalysisCell struct {
+	Device string `json:"device"`
+	Model  string `json:"model"`
+	Aggregate
+}
+
 type Overview struct {
+	Cells       []AnalysisCell   `json:"cells,omitempty"`
 	Breakdown   []DailyBreakdown `json:"breakdown"`
 	Total       Aggregate        `json:"total"`
 	Days        []Aggregate      `json:"days"`
@@ -42,6 +64,7 @@ func addTokens(a *Tokens, b Tokens) {
 	a.CacheWrite += b.CacheWrite
 }
 func addAggregate(a *Aggregate, b Aggregate) {
+	a.Coverage.add(b.Coverage)
 	addTokens(&a.Tokens, b.Tokens)
 	a.Total += b.Total
 	a.Cost += b.Cost
@@ -65,7 +88,19 @@ func sortedBuckets(m map[string]*Aggregate) []Aggregate {
 // Overview reads a consistent SQLite snapshot, independent of browser pagination.
 // Limits fail explicitly, never return a silently partial total.
 func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string) (Overview, error) {
+	return s.aggregate(ctx, deviceID, agent, start, end, false)
+}
+
+// Analysis shares the consistent snapshot and Keeper pricing path with Overview.
+// The extra device/model matrix is collected only for this authenticated endpoint.
+func (s *Store) Analysis(ctx context.Context, deviceID, agent, start, end string) (Overview, error) {
+	return s.aggregate(ctx, deviceID, agent, start, end, true)
+}
+
+func (s *Store) aggregate(ctx context.Context, deviceID, agent, start, end string, analysis bool) (Overview, error) {
 	out := Overview{Total: Aggregate{Key: "all", Complete: true}}
+	cells := map[string]map[string]*Aggregate{}
+	var payloadBytes int64
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -95,7 +130,7 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 	if err != nil {
 		return out, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT device_id,payload FROM snapshots WHERE (?='' OR device_id=?) AND (?='' OR agent=?) AND (?='' OR day>=?) AND (?='' OR day<=?)`, deviceID, deviceID, agent, agent, start, start, end, end)
+	rows, err := tx.QueryContext(ctx, `SELECT device_id,payload FROM snapshots WHERE (?='' OR device_id=?) AND (?='' OR agent=?) AND (?='' OR day>=?) AND (?='' OR day<=?) LIMIT 100001`, deviceID, deviceID, agent, agent, start, start, end, end)
 	if err != nil {
 		return out, err
 	}
@@ -113,6 +148,10 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		var raw []byte
 		var snapshot Snapshot
 		if err = rows.Scan(&id, &raw); err == nil {
+			payloadBytes += int64(len(raw))
+			if payloadBytes > 256<<20 {
+				return out, errors.New("range exceeds 256 MiB; narrow the filters")
+			}
 			err = json.Unmarshal(raw, &snapshot)
 		}
 		if err != nil {
@@ -128,15 +167,29 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		}
 		a := Aggregate{Tokens: snapshot.Totals, Total: snapshot.TotalTokens, Complete: true}
 		var assigned int64
+		var assignedTokens Tokens
+		if analysis && cells[id] == nil {
+			cells[id] = map[string]*Aggregate{}
+		}
 		for _, m := range snapshot.Models {
 			e := estimate(m, resolvePrice(m.Name, prices))
 			v := Aggregate{Key: m.Name, Tokens: m.Tokens, Total: m.Input + m.Output + m.CacheRead + m.CacheWrite, Complete: e.Cost != nil}
 			assigned += v.Total
+			addTokens(&assignedTokens, m.Tokens)
 			if e.Cost != nil {
 				v.Cost = *e.Cost
+				v.Coverage.Priced = 1
+			} else if e.Status == "missing_price" {
+				v.Coverage.Missing = 1
+			} else {
+				v.Coverage.Conditional = 1
 			}
+			a.Coverage.add(v.Coverage)
 			a.Cost += v.Cost
 			a.Complete = a.Complete && v.Complete
+			if analysis {
+				addAggregate(bucket(cells[id], m.Name), v)
+			}
 			addAggregate(bucket(models, m.Name), v)
 			if dayModels[snapshot.Day][m.Name] == nil {
 				breakdownCells++
@@ -148,6 +201,17 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 		}
 		if assigned != a.Total {
 			a.Complete = false
+			a.Coverage.Unattributed = a.Total - assigned
+			if analysis {
+				// Empty model identifier cannot occur in validated uploads.
+				v := Aggregate{Coverage: CostCoverage{Unattributed: a.Total - assigned}, Total: a.Total - assigned, Tokens: Tokens{Input: a.Tokens.Input - assignedTokens.Input, Output: a.Tokens.Output - assignedTokens.Output, CacheRead: a.Tokens.CacheRead - assignedTokens.CacheRead, CacheWrite: a.Tokens.CacheWrite - assignedTokens.CacheWrite}}
+				addAggregate(bucket(cells[id], ""), v)
+				addAggregate(bucket(models, ""), v)
+				if dayModels[snapshot.Day][""] == nil {
+					breakdownCells++
+				}
+				addAggregate(bucket(dayModels[snapshot.Day], ""), v)
+			}
 		}
 		addAggregate(&out.Total, a)
 		addAggregate(bucket(days, snapshot.Day), a)
@@ -159,12 +223,20 @@ func (s *Store) Overview(ctx context.Context, deviceID, agent, start, end string
 			return out, errors.New("range exceeds 100000 breakdown cells; narrow the filters")
 		}
 		addAggregate(bucket(dayDevices[snapshot.Day], id), a)
+		if analysis && (len(models) > 100 || len(devices) > 100 || len(days)*(len(models)+len(devices)) > 100000) {
+			return out, errors.New("analysis exceeds 100 models/devices or 100000 chart points; narrow the filters")
+		}
 		if len(models) > 10000 || len(agents) > 1000 {
 			return out, errors.New("range has too many identifiers; narrow the filters")
 		}
 	}
 	if err = rows.Err(); err != nil {
 		return out, err
+	}
+	for _, device := range sortedBuckets(devices) {
+		for _, value := range sortedBuckets(cells[device.Key]) {
+			out.Cells = append(out.Cells, AnalysisCell{Device: device.Key, Model: value.Key, Aggregate: value})
+		}
 	}
 	out.Days = sortedBuckets(days)
 	for _, day := range out.Days {
