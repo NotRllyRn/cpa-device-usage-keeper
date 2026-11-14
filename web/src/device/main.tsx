@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useThemeStore } from '@/stores';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardToolbar } from '@/components/dashboard/DashboardToolbar';
@@ -16,7 +17,7 @@ import { TokenActivityCard } from '@/components/usage/TokenActivityCard';
 import { StatCards } from '@/components/usage/StatCards';
 import { TimeRangeControl } from '@/components/usage/TimeRangeControl';
 import type { UsageTimeRange, UsageCustomRange } from '@/lib/types';
-import { dashboardData, rangeDates, allTimeDates, validateDashboardRange, MAX_DEVICE_RANGE_DAYS } from './dashboard';
+import { dashboardData, rangeDates, allTimeDates, validateDashboardRange, MAX_DEVICE_RANGE_DAYS, formatDeviceDay } from './dashboard';
 import '@/lib/chartjs';
 import { DeviceAPI, type Overview, type Device, type Filters } from './api';
 import '@/index.css';
@@ -40,6 +41,7 @@ const tabs: { id: Tab; label: string; href: string }[] = [
   { id: 'devices', label: 'Devices', href: '#devices' }, { id: 'settings', label: 'Settings', href: '#settings' },
 ];
 function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) {
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const isDark = useThemeStore(s => s.resolvedTheme === 'dark');
   const [range, setRange] = useState<UsageTimeRange>('7d');
   const [customRange, setCustomRange] = useState<UsageCustomRange>();
@@ -128,8 +130,9 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       {tab === 'overview' && <>
         <StatCards aggregateMode usage={dashboard?.usage ?? null} dailyAverageUsage={dashboard?.usage ?? null} reserveDailyAverage loading={busy} sparklines={{ requests: null, tokens: null, rpm: null, tpm: null, cacheReadRate: null, cost: null }} />
         <TokenActivityCard aggregateMode activity={dashboard?.activity ?? null} loading={busy} requestIdentity={JSON.stringify(filters)} />
-        <UsageComparisonCharts aggregateMode comparisons={dashboard?.comparisons} deviceComparisons={dashboard?.devices} loading={busy} isDark={isDark} />
-        <section className={styles.statCard}><h2>Models</h2><div className="device-table"><table><thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.models.map(m => <tr key={m.key}><td>{m.key}</td><td>{number(m.tokens.input)}</td><td>{number(m.tokens.output)}</td><td>{number(m.tokens.cache_read)} / {number(m.tokens.cache_write)}</td><td>{m.complete ? money(m.known_cost) : `Unknown (known ${money(m.known_cost)})`}</td></tr>)}</tbody></table></div><p className="device-note">Unattributed or extra tokens remain in daily totals and are not assigned a fabricated model or cost.</p></section>
+        {dashboard && <details className="device-note device-coverage" data-device-coverage><summary>{dashboard.observedDays.toLocaleString()} of {dashboard.calendarDays.toLocaleString()} days have uploads · About gaps</summary><p>{dashboard.zeroDays} uploaded days report zero tokens. {(dashboard.calendarDays - dashboard.observedDays).toLocaleString()} days have no uploads, not confirmed zero usage. Gray activity cells can mean either; scroll the grid horizontally to reach later dates. Trends leave unreported days as gaps. Calendar-day averages include all selected days.</p></details>}
+        <UsageComparisonCharts aggregateMode comparisons={dashboard?.comparisons} deviceComparisons={dashboard?.devices} observedBuckets={dashboard?.observedBuckets} formatBucketLabel={formatDeviceDay} loading={busy} isDark={isDark} isMobile={isMobile} />
+        <section className={styles.statCard}><h2>Models</h2><p id="device-model-scroll" className="device-note">Scroll horizontally for all token and cost columns. Keyboard: focus the table region, then use ← / →.</p><div className="device-table" role="region" aria-label="Model usage, horizontally scrollable" aria-describedby="device-model-scroll" tabIndex={0}><table><thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.models.map(m => <tr key={m.key}><td>{m.key}</td><td>{number(m.tokens.input)}</td><td>{number(m.tokens.output)}</td><td>{number(m.tokens.cache_read)} / {number(m.tokens.cache_write)}</td><td>{m.complete ? money(m.known_cost) : `Unknown (known ${money(m.known_cost)})`}</td></tr>)}</tbody></table></div><p className="device-note">Unattributed or extra tokens remain in daily totals and are not assigned a fabricated model or cost.</p></section>
       </>}
       {tab === 'history' && <section className={styles.statCard}><h2>Daily history</h2><div className="device-table"><table><thead><tr><th>UTC day</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cache read / write</th><th>Estimated USD</th></tr></thead><tbody>{overview?.days.map(d => <tr key={d.key}><td>{d.key}</td><td>{number(d.total_tokens)}</td><td>{number(d.tokens.input)}</td><td>{number(d.tokens.output)}</td><td>{number(d.tokens.cache_read)} / {number(d.tokens.cache_write)}</td><td>{d.complete ? money(d.known_cost) : `Incomplete: ${money(d.known_cost)}`}</td></tr>)}</tbody></table></div></section>}
       {tab === 'devices' && <section className={styles.statCard}><h2>Devices</h2><form onSubmit={e => { e.preventDefault(); void mutate(async () => { const result = await api.request<{ token: string }>('/devices', 'POST', { name }); setEnrollment(result.token); setName(''); }).catch(e => setError(message(e))); }}><label>Device name <input required pattern="[a-zA-Z0-9][a-zA-Z0-9._:+\-]{0,159}" value={name} onChange={e => setName(e.target.value)} /></label><Button type="submit" disabled={busy}>Enroll</Button></form>

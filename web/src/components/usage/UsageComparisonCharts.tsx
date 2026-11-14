@@ -28,13 +28,15 @@ interface ChartProps {
   loading: boolean;
   keyViewer?: boolean;
   aggregateMode?: boolean;
+  formatBucketLabel?: (bucket: string) => string;
+  observedBuckets?: readonly boolean[];
   deviceComparisons?: UsageComparisonItem[];
   isDark?: boolean;
   isMobile?: boolean;
 }
 
 // 主页面与 Key Viewer 共用单卡片，维度边界仍由服务端权限和这里的可选项共同限制。
-export function UsageComparisonCharts({ comparisons, loading, keyViewer = false, isDark = false, isMobile = false, aggregateMode = false, deviceComparisons }: ChartProps) {
+export function UsageComparisonCharts({ comparisons, loading, keyViewer = false, isDark = false, isMobile = false, aggregateMode = false, deviceComparisons, formatBucketLabel, observedBuckets }: ChartProps) {
   const { t } = useTranslation();
   const headingId = useId();
   const [selected, setSelected] = useState<UsageDimension>('models');
@@ -59,18 +61,18 @@ export function UsageComparisonCharts({ comparisons, loading, keyViewer = false,
     <Card title={t('usage_stats.comparison_token_trend')} className={styles.card} extra={
       <span className={styles.total} data-comparison-total><strong>{items.length || !loading ? formatCompactNumber(total) : '—'}</strong><span>{t('usage_stats.comparison_tokens')}</span></span>
     }>
-      <ComparisonArea aggregateMode={aggregateMode} key={dimension} dimension={dimension} comparisons={comparisons} loading={loading} isDark={isDark} isMobile={isMobile} />
+      <ComparisonArea formatBucketLabel={formatBucketLabel} observedBuckets={observedBuckets} aggregateMode={aggregateMode} key={dimension} dimension={dimension} comparisons={comparisons} loading={loading} isDark={isDark} isMobile={isMobile} />
     </Card>
   </section>;
 }
 
-function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, aggregateMode }:  ChartProps & {dimension: UsageDimension}) {
+function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, aggregateMode, formatBucketLabel, observedBuckets }:  ChartProps & {dimension: UsageDimension}) {
   const { t, i18n } = useTranslation();
   const items = comparisons?.[dimension] ?? EMPTY;
   const buckets = comparisons?.buckets ?? EMPTY_BUCKETS;
   const view = useMemo(() => buildComparisonView(items, t('usage_stats.comparison_others')), [items, t]);
   const granularity = comparisons?.granularity ?? 'hourly';
-  const labels = useMemo(() => disambiguateTimeLabels(buckets, comparisons?.timezone, bucket => formatComparisonBucket(bucket, granularity, comparisons?.timezone, i18n.language)), [buckets, granularity, comparisons?.timezone, i18n.language]);
+  const labels = useMemo(() => disambiguateTimeLabels(buckets, comparisons?.timezone, bucket => formatBucketLabel ? formatBucketLabel(bucket) : formatComparisonBucket(bucket, granularity, comparisons?.timezone, i18n.language)), [buckets, granularity, comparisons?.timezone, i18n.language, formatBucketLabel]);
   const fullLabels = useMemo(() => disambiguateTimeLabels(buckets, comparisons?.timezone, bucket => formatComparisonBucket(bucket, granularity, comparisons?.timezone, i18n.language, true)), [buckets, granularity, comparisons?.timezone, i18n.language]);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const chartRef = useRef<ChartJS<'line'>>(null);
@@ -79,6 +81,9 @@ function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, agg
   const detailsTooltip = usePortalTooltip();
   const { dismiss } = detailsTooltip;
   const theme = useMemo(() => getUsageChartTheme(Boolean(isDark)), [isDark]);
+  // The daily adapter changes tick density at the mobile breakpoint. Resize
+  // after applying those options so the canvas backing size follows its surface.
+  useEffect(() => { if (formatBucketLabel) chartRef.current?.resize(); }, [isMobile, formatBucketLabel]);
   const peak = useMemo(() => buckets.reduce((max, _, index) => Math.max(max,
     view.rows.reduce((sum, row) => sum + (hidden.has(row.key) ? 0 : row.token_series?.[index] ?? 0), 0)), 0), [buckets, view.rows, hidden]);
 
@@ -97,19 +102,20 @@ function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, agg
     }
   }, [items, buckets, hidden]);
 
-  const data = useMemo<ChartData<'line', number[], string>>(() => ({
+  const data = useMemo<ChartData<'line', (number | null)[], string>>(() => ({
     labels,
     datasets: view.rows.map((row, index) => ({
       key: row.key,
       label: row.label,
-      data: buckets.map((_, bucketIndex) => row.token_series?.[bucketIndex] ?? 0),
+      data: buckets.map((_, bucketIndex) => observedBuckets && !observedBuckets[bucketIndex] ? null : row.token_series?.[bucketIndex] ?? 0),
       backgroundColor: colorFor(row, index), borderColor: colorFor(row, index), borderWidth: 0,
-      fill: index === 0 ? 'origin' : '-1', cubicInterpolationMode: 'monotone',
-      pointRadius: buckets.length === 1 ? 4 : 0, pointHoverRadius: 4,
+      fill: index === 0 ? 'origin' : '-1', cubicInterpolationMode: observedBuckets ? 'default' : 'monotone',
+      ...(observedBuckets ? { tension: 0, spanGaps: false } : {}),
+      pointRadius: observedBuckets ? buckets.map((_, i) => observedBuckets[i] && !observedBuckets[i - 1] && !observedBuckets[i + 1] ? 3 : 0) : buckets.length === 1 ? 4 : 0, pointHoverRadius: 4,
       pointHoverBackgroundColor: colorFor(row, index), pointHoverBorderColor: theme.tooltipBg, pointHoverBorderWidth: 2,
       hidden: hidden.has(row.key),
     })),
-  }), [labels, buckets, view.rows, hidden, theme.tooltipBg]);
+  }), [labels, buckets, view.rows, hidden, theme.tooltipBg, observedBuckets]);
 
   const options = useMemo<ChartOptions<'line'>>(() => ({
     responsive: true, maintainAspectRatio: false,
@@ -147,12 +153,17 @@ function ComparisonArea({ dimension, comparisons, loading, isDark, isMobile, agg
     },
     scales: {
       x: {offset: buckets.length === 1, border: {display: false}, grid: {display: false},
-        ticks: {color: theme.textSecondary, maxRotation: 0, maxTicksLimit: isMobile ? 3 : 7, padding: 10, font: {size: 12}}},
+        ...(formatBucketLabel ? { afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
+          const count = isMobile ? 2 : 5;
+          const ticks = axis.ticks;
+          if (ticks.length > count) axis.ticks = Array.from({length: count}, (_, i) => ticks[Math.round(i * (ticks.length - 1) / (count - 1))]);
+        } } : {}),
+        ticks: {autoSkip: !formatBucketLabel, color: theme.textSecondary, maxRotation: 0, maxTicksLimit: formatBucketLabel ? (isMobile ? 2 : 5) : (isMobile ? 3 : 7), padding: 10, font: {size: 12}}},
       y: {stacked: true, beginAtZero: true, max: Math.max(1, peak) * 1.08, border: {display: false, dash: [4, 4]},
         grid: {color: theme.grid, drawTicks: false},
         ticks: {color: theme.textSecondary, includeBounds: false, maxTicksLimit: 5, padding: 10, font: {size: 12}, callback: value => formatCompactNumber(Number(value))}},
     },
-  }), [buckets.length, fullLabels, isMobile, theme, view.rows, peak]);
+  }), [buckets.length, fullLabels, isMobile, theme, view.rows, peak, formatBucketLabel]);
 
   const metricLines = (row: ComparisonRow) => [
     row.label,

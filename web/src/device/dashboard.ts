@@ -25,6 +25,10 @@ export function allTimeDates(earliest: string | null, now = new Date()) {
   return { start: earliest && earliest < today ? earliest : today, end: today };
 }
 
+export function formatDeviceDay(day: string) {
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(day + 'T00:00:00Z'));
+}
+
 export function dashboardData(data: Overview, devices: Device[], start: string, end: string) {
   validateDashboardRange(start, end, data.models.length + data.devices.length);
   const buckets: string[] = [];
@@ -56,5 +60,9 @@ export function dashboardData(data: Overview, devices: Device[], start: string, 
     ...tokens(total), rows: 1, columns: buckets.length, bucket_seconds: 86400, window_start: start + 'T00:00:00Z', window_end: end + 'T23:59:59Z',
     blocks: buckets.map(day => ({ ...tokens(days.get(day)), start_time: day + 'T00:00:00Z', end_time: day + 'T23:59:59Z', success: 0, failure: 0, rate: 0 })),
   };
-  return { comparisons, devices: items(data.devices, 'devices'), usage, activity };
+  return { comparisons, devices: items(data.devices, 'devices'), usage, activity,
+    observedBuckets: buckets.map(day => days.has(day)),
+    observedDays: days.size, zeroDays: data.days.filter(day => day.total_tokens === 0).length,
+    calendarDays: buckets.length,
+  };
 }

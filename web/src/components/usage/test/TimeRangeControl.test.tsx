@@ -52,9 +52,14 @@ describe('TimeRangeControl', () => {
     await click('[data-time-range-trigger="desktop"]');
     expect(document.querySelector('[data-time-range-mode="all"]')).toBeNull();
     const onSelect = vi.fn();
-    await act(async () => root.render(<TimeRangeControl dailyOnly value="custom" customRange={{unit:'day',start:'2024-01-01',end:'2026-11-09'}} onChange={vi.fn()} ariaLabel="Range" timeZone="UTC" maxCustomDayRangeDays={3660} showCustomRangeYear allTime={{active:true,onSelect}} />));
+    const onChange = vi.fn();
+    await act(async () => root.render(<TimeRangeControl dailyOnly value="custom" customRange={{unit:'day',start:'2024-01-01',end:'2026-11-09'}} onChange={onChange} ariaLabel="Range" timeZone="UTC" maxCustomDayRangeDays={3660} showCustomRangeYear allTime={{active:true,onSelect}} />));
     expect(document.querySelector('[data-time-range-trigger="desktop"]')?.textContent).toContain('2024');
     expect(document.querySelector('[data-time-range-mode="all"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-all-time-summary]')?.textContent).toContain('2024-01-01');
+    expect(document.querySelector('[data-custom-endpoint]')).toBeNull();
+    await click('[data-time-range-mode="custom"]');
+    expect(onChange).toHaveBeenCalledWith('custom', {unit:'day',start:'2024-01-01',end:'2026-11-09'});
     await click('[data-time-range-mode="all"]');
     expect(onSelect).toHaveBeenCalledOnce();
   });

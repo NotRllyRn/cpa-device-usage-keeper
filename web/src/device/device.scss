@@ -1,6 +1,22 @@
 // The device toolbar has three filters; give the date range its own full row
 // when the shared toolbar splits, rather than squeezing it into device width.
 [data-keeper-page] [data-flow='split'] [data-dashboard-filter]:has([data-time-range-shell]) { grid-column: 1 / -1; }
+// Only the opt-in device range panels use opaque surfaces and larger presets.
+.modal:has([data-device-range]), [role='dialog']:has(> [data-device-range]) {
+  background: var(--floating-surface);
+  color: var(--text-primary);
+  backdrop-filter: none;
+}
+[data-device-range] {
+  [role='group'] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 6px; }
+  [data-time-range-mode] { min-height: 44px; font-size: 14px; color: var(--text-primary); }
+  [data-time-range-mode='all'] { grid-column: 1 / -1; }
+  [data-all-time-summary] { padding: 16px 8px; }
+  [data-all-time-summary] small { display: block; margin-top: 10px; color: var(--text-secondary); line-height: 1.5; }
+}
+[data-keeper-page] [data-comparison] canvas { max-width: 100%; }
+.device-table:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 4px; }
+.device-coverage summary { cursor: pointer; min-height: 44px; padding: 12px 0; color: var(--text-primary); }
 .device-note { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 12px 0; }
 .device-error { color: #e35b6b; padding: 12px; }
 .device-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }

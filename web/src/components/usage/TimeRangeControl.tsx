@@ -81,6 +81,7 @@ interface RangePanelProps {
   mode: UsageTimeRangeMode;
   rollingValues: Record<RollingUnit, number>;
   customRange: UsageCustomRange;
+  resolvedAllTimeRange?: UsageCustomRange;
   customAnchorMs: number;
   timeZone: string;
   customEnabled: boolean;
@@ -101,6 +102,7 @@ function TimeRangePanel({
   mode,
   rollingValues,
   customRange,
+  resolvedAllTimeRange,
   customAnchorMs,
   timeZone,
   customEnabled,
@@ -131,7 +133,7 @@ function TimeRangePanel({
   };
 
   return (
-    <div className={styles.rangePanel}>
+    <div className={styles.rangePanel} data-device-range={allTime ? '' : undefined}>
       <div className={styles.modeSelector} role="group" aria-label={t('usage_stats.range_filter')}>
         {MODE_OPTIONS.filter(option => !dailyOnly || option.value !== 'hour').map((option) => (
           <button
@@ -149,7 +151,12 @@ function TimeRangePanel({
         {allTime && <button type="button" className={allTime.active ? styles.modeButtonActive : styles.modeButton} data-time-range-mode="all" aria-pressed={allTime.active} onClick={allTime.onSelect}>All time</button>}
       </div>
 
-      {isRolling ? (
+      {allTime?.active ? (
+        <div className={styles.naturalDaySummary} data-all-time-summary>
+          <span><strong>All time</strong><small>{resolvedAllTimeRange ? `${resolvedAllTimeRange.start} – ${resolvedAllTimeRange.end} · UTC` : 'Resolving usage dates…'}</small>
+          <small>From the first uploaded usage day for these filters through today. Updates on refresh and at midnight UTC.</small></span>
+        </div>
+      ) : isRolling ? (
         <div className={styles.sliderSection}>
           <div className={styles.sliderHeader}>
             <span>{t('usage_stats.range_recent_window')}</span>
@@ -351,6 +358,7 @@ export function TimeRangeControl({
     if (nextMode === 'custom') {
       if (!customEnabled) return;
       prepareCustomDraft();
+      if (allTime?.active && customRange) onChange('custom', customRange);
       setPendingMode('custom');
       return;
     }
@@ -552,6 +560,7 @@ export function TimeRangeControl({
       mode={panelMode}
       rollingValues={displayedRollingValues}
       customRange={customDraft}
+      resolvedAllTimeRange={customRange}
       customAnchorMs={customAnchorMs}
       timeZone={timeZone}
       customEnabled={customEnabled}

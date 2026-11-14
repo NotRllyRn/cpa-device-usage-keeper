@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dashboardData, rangeDates, allTimeDates, validateDashboardRange } from './dashboard';
+import { dashboardData, rangeDates, allTimeDates, validateDashboardRange, formatDeviceDay } from './dashboard';
 import type { Aggregate, Overview } from './api';
 describe('shared aggregate contracts', () => {
  it('includes both cache categories in shared input without changing stored counts', () => {
@@ -11,6 +11,12 @@ describe('shared aggregate contracts', () => {
   expect(view.comparisons.models[0].input_tokens).toBe(1200);
   expect(view.comparisons.models[0].cache_read_tokens / view.comparisons.models[0].input_tokens).toBe(.75);
   expect(total.tokens.input).toBe(100);
+  expect(view.observedBuckets).toEqual([false]);
+  expect(view.observedDays).toBe(0);
+  expect(formatDeviceDay('2024-01-01')).toBe('Jan 1, 2024');
+  const reported=dashboardData({...data,days:[{...total,key:'2026-01-01',total_tokens:0}]},[],'2026-01-01','2026-01-02');
+  expect(reported.observedBuckets).toEqual([true,false]);
+  expect(reported.zeroDays).toBe(1);
  });
 });
 describe('UTC aggregate ranges', () => {

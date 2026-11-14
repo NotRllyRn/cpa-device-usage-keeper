@@ -43,6 +43,15 @@ it('renders a single stacked area chart with all four dimensions and zero-filled
     expect(container.querySelector('[data-dimension="'+dimension+'"]')?.getAttribute('aria-pressed')).toBe('true');
   }
 });
+it('opts into year labels, sparse mobile ticks and unreported-day gaps without changing totals', async () => {
+  await act(async()=>root.render(<UsageComparisonCharts comparisons={comparisons()} loading={false} isMobile formatBucketLabel={day=>day} observedBuckets={[true,false,true]} />));
+  expect(chart.data?.labels).toEqual(['2026-09-18','2026-09-19','2026-09-20']);
+  expect(chart.data?.datasets[0].data).toEqual([40,null,60]);
+  expect(chart.data?.datasets[0]).toMatchObject({cubicInterpolationMode:'default',tension:0,spanGaps:false});
+  expect(chart.options?.scales?.x?.ticks?.maxTicksLimit).toBe(2);
+  expect(chart.data?.datasets[0].pointRadius).toEqual([3,0,3]);
+  expect(container.querySelector('[data-comparison-total]')?.textContent).toContain('100');
+});
 it('aggregates Others at each time bucket and retains every total and unknown price',()=>{
   const items=Array.from({length:7},(_,i)=>item('m'+i,{total_tokens:100-i,token_series:[60-i,0,40],cost:i===6?null:1}));
   const view=buildComparisonView(items,'Others');

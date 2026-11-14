@@ -156,13 +156,36 @@ try {
     assert.match(await trigger().innerText(),/2024/);
     for(const width of [1440,390]) {
       await page.setViewportSize({width,height:1000}); await page.waitForTimeout(500);
-      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`all time overflow ${width}`);
       await page.screenshot({path:`${output}/device-${theme}-${width}-all-time.png`,fullPage:true});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`all time overflow ${width}: ${await page.evaluate(()=>JSON.stringify([...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+2).slice(-15).map(el=>({tag:el.tagName,cls:el.className,right:el.getBoundingClientRect().right}))))}`);
       await trigger().click();
+      if(process.env.DEVICE_RANGE_POLISH) {
+        await page.locator('[data-all-time-summary]').waitFor();
+        assert.equal(await page.locator('[data-custom-endpoint]').count(),0);
+        await page.waitForTimeout(400);
+        const panel=page.getByRole('dialog',{name:'Time range',exact:true});
+        const background=await panel.evaluate(el=>getComputedStyle(el).backgroundColor);
+        assert.match(background,/^rgb\(/,`opaque range panel: ${background}`);
+        for(const box of await page.locator('[data-time-range-mode]').evaluateAll(nodes=>nodes.map(el=>({width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})))) {
+          assert.ok(box.width>=44 && box.height>=44,'preset target at least 44px');
+        }
+        if(width===390) {
+          const overlay=await page.locator('.modal-overlay').boundingBox();
+          assert.ok(overlay.y<=0 && overlay.height>=1000,'overlay covers viewport');
+          const y=await page.evaluate(()=>scrollY);
+          await page.mouse.move(5,700); await page.mouse.wheel(0,500); await page.waitForTimeout(100);
+          assert.equal(await page.evaluate(()=>scrollY),y,'background stays scroll locked');
+        }
+        await page.screenshot({path:`${output}/device-${theme}-${width}-all-time-menu.png`});
+      }
       await page.locator('[data-time-range-mode="custom"]').click();
       assert.match(await page.locator('[data-custom-endpoint="start"]').innerText(),/Jan 1, 2024/);
-      await page.screenshot({path:`${output}/device-${theme}-${width}-all-time-range.png`,fullPage:true});
-      await page.keyboard.press('Escape');
+      await page.screenshot({path:`${output}/device-${theme}-${width}-all-time-range.png`});
+      if(process.env.DEVICE_RANGE_POLISH) {
+        assert.equal(await page.locator('[data-time-range-mode="custom"]').getAttribute('aria-pressed'),'true');
+        assert.doesNotMatch(await trigger().innerText(),/All time/);
+        await expectDates(()=>page.locator('[data-time-range-mode="all"]').click(),'2024-01-01');
+      } else await page.keyboard.press('Escape');
     }
     await page.getByRole('button',{name:'Device',exact:true}).click();
     await expectDates(()=>page.getByRole('option',{name:'Example laptop',exact:true}).click(),'2025-01-01');
