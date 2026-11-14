@@ -1,3 +1,6 @@
+// The device toolbar has three filters; give the date range its own full row
+// when the shared toolbar splits, rather than squeezing it into device width.
+[data-keeper-page] [data-flow='split'] [data-dashboard-filter]:has([data-time-range-shell]) { grid-column: 1 / -1; }
 .device-note { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 12px 0; }
 .device-error { color: #e35b6b; padding: 12px; }
 .device-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }

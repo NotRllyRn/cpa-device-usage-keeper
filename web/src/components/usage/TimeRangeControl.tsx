@@ -76,6 +76,7 @@ const LIQUID_PARTICLE_MOTION_CLASSES: Record<LiquidParticleMotion, string> = {
 };
 
 interface RangePanelProps {
+  allTime?: { active: boolean; onSelect: () => void };
   dailyOnly?: boolean;
   mode: UsageTimeRangeMode;
   rollingValues: Record<RollingUnit, number>;
@@ -95,6 +96,7 @@ interface RangePanelProps {
 }
 
 function TimeRangePanel({
+  allTime,
   dailyOnly = false,
   mode,
   rollingValues,
@@ -135,15 +137,16 @@ function TimeRangePanel({
           <button
             key={option.value}
             type="button"
-            className={mode === option.value ? styles.modeButtonActive : styles.modeButton}
+            className={!allTime?.active && mode === option.value ? styles.modeButtonActive : styles.modeButton}
             data-time-range-mode={option.value}
-            aria-pressed={mode === option.value}
+            aria-pressed={!allTime?.active && mode === option.value}
             disabled={option.value === 'custom' && !customEnabled}
             onClick={() => onModeChange(option.value)}
           >
             {t(option.labelKey)}
           </button>
         ))}
+        {allTime && <button type="button" className={allTime.active ? styles.modeButtonActive : styles.modeButton} data-time-range-mode="all" aria-pressed={allTime.active} onClick={allTime.onSelect}>All time</button>}
       </div>
 
       {isRolling ? (
@@ -238,6 +241,8 @@ function TimeRangePanel({
 }
 
 interface TimeRangeControlProps {
+  allTime?: { active: boolean; onSelect: () => void };
+  showCustomRangeYear?: boolean;
   dailyOnly?: boolean;
   value: UsageTimeRange;
   customRange?: UsageCustomRange;
@@ -249,6 +254,8 @@ interface TimeRangeControlProps {
 }
 
 export function TimeRangeControl({
+  allTime,
+  showCustomRangeYear = false,
   dailyOnly = false,
   value,
   customRange,
@@ -318,7 +325,7 @@ export function TimeRangeControl({
     if (appliedMode === 'yesterday') return t('usage_stats.range_yesterday');
     if (appliedMode === 'custom') {
       return customRange
-        ? formatCustomRangeLabel(customRange, { locale: i18n?.language, timeZone })
+        ? formatCustomRangeLabel(customRange, { locale: i18n?.language, timeZone, includeYear: showCustomRangeYear })
         : t('usage_stats.range_custom');
     }
     return t(appliedMode === 'hour' ? 'usage_stats.range_last_hours' : 'usage_stats.range_last_days', {
@@ -541,6 +548,7 @@ export function TimeRangeControl({
 
   const panel = (
     <TimeRangePanel dailyOnly={dailyOnly}
+      allTime={allTime && { active: allTime.active && pendingMode !== 'custom', onSelect: () => { setPendingMode(null); if (mobileOpen) closeMobileModal(); else closeDesktopPopover(true); allTime.onSelect(); } }}
       mode={panelMode}
       rollingValues={displayedRollingValues}
       customRange={customDraft}
@@ -558,7 +566,7 @@ export function TimeRangeControl({
       onCustomCancel={handleCustomCancel}
     />
   );
-  const currentLabel = formatCurrentLabel();
+  const currentLabel = allTime?.active ? `All time · ${formatCurrentLabel()}` : formatCurrentLabel();
 
   return (
     <div className={styles.controlRoot}>

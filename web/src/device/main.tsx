@@ -16,7 +16,7 @@ import { TokenActivityCard } from '@/components/usage/TokenActivityCard';
 import { StatCards } from '@/components/usage/StatCards';
 import { TimeRangeControl } from '@/components/usage/TimeRangeControl';
 import type { UsageTimeRange, UsageCustomRange } from '@/lib/types';
-import { dashboardData, rangeDates } from './dashboard';
+import { dashboardData, rangeDates, allTimeDates, validateDashboardRange, MAX_DEVICE_RANGE_DAYS } from './dashboard';
 import '@/lib/chartjs';
 import { DeviceAPI, type Overview, type Device, type Filters } from './api';
 import '@/index.css';
@@ -43,6 +43,9 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const isDark = useThemeStore(s => s.resolvedTheme === 'dark');
   const [range, setRange] = useState<UsageTimeRange>('7d');
   const [customRange, setCustomRange] = useState<UsageCustomRange>();
+  const [allTime, setAllTime] = useState(false);
+  const [allTimeRange, setAllTimeRange] = useState<UsageCustomRange>();
+  const [emptyHistory, setEmptyHistory] = useState(false);
   const [syncPrices, setSyncPrices] = useState(false);
   const [manualModel, setManualModel] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
@@ -61,15 +64,21 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const refresh = useCallback(async () => {
     const id = ++request.current; setBusy(true); setError('');
     try {
-      const dates = rangeDates(range, customRange);
+      const boundary = allTime ? await api.boundary(filters) : null;
+      if (id !== request.current) return false;
+      const dates = allTime ? allTimeDates(boundary!.earliest_day) : rangeDates(range, customRange);
+      setEmptyHistory(allTime && boundary!.earliest_day === null);
+      if (allTime) setAllTimeRange({ unit: 'day', ...dates });
+      validateDashboardRange(dates.start, dates.end);
       const [data, list, configs] = await Promise.all([api.overview({ ...filters, ...dates }), api.devices(), api.prices()]);
       if (id !== request.current) return false;
+      validateDashboardRange(dates.start, dates.end, data.models.length + data.devices.length);
       setOverview(data); setLoadedDates(dates); setDevices(list); setPrices(configs);
       setModelOptions(old => [...new Set([...old, ...data.models.map(m => m.key), ...configs.map(p => p.model)])].sort());
       return true;
     } catch (e) { if (id === request.current) { setError(message(e)); setOverview(null); } return false; }
     finally { if (id === request.current) setBusy(false); }
-  }, [api, filters, range, customRange]);
+  }, [api, filters, range, customRange, allTime]);
   useEffect(() => {
     void refresh();
     // This is a monotonic request generation, not a DOM ref. Invalidate every
@@ -79,6 +88,18 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   }, [refresh]);
   const currentRefresh = useRef(refresh);
   useEffect(() => { currentRefresh.current = refresh; }, [refresh]);
+  useEffect(() => {
+    if (!allTime) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const now = Date.now();
+      timer = setTimeout(() => { void currentRefresh.current(); schedule(); }, 86400000 - now % 86400000 + 50);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void currentRefresh.current(); };
+    schedule();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [allTime]);
   const mutate = async (operation: () => Promise<unknown>) => {
     if (mutation.current) throw new Error('Another change is still saving');
     mutation.current = true; setError('');
@@ -100,9 +121,10 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       <DashboardToolbar items={tabs} activeId={tab} onNavigate={setTab} onRefresh={() => void refresh()} refreshing={busy} filters={[
         <Select key="device" value={filters.device} options={[{ value: '', label: 'All devices' }, ...devices.map(d => ({ value: d.id, label: d.name + (d.revoked ? ' (revoked)' : '') }))]} onChange={v => filter('device', v)} ariaLabel="Device" />,
         <Select key="agent" value={filters.agent} options={[{ value: '', label: 'All agents' }, ...[...new Set([...(overview?.agents ?? []), filters.agent].filter(Boolean))].map(a => ({ value: a, label: a }))]} onChange={v => filter('agent', v)} ariaLabel="Agent" />,
-        <TimeRangeControl key="range" dailyOnly value={range} customRange={customRange} timeZone="UTC" ariaLabel="Time range" onChange={(value, custom) => { setRange(value); setCustomRange(custom); setFilters(old => ({ ...old, ...rangeDates(value, custom) })); }} />,
+        <TimeRangeControl key="range" dailyOnly value={allTime ? 'custom' : range} customRange={allTime ? allTimeRange : customRange} maxCustomDayRangeDays={MAX_DEVICE_RANGE_DAYS} showCustomRangeYear allTime={{ active: allTime, onSelect: () => { setAllTimeRange(undefined); setAllTime(true); if (allTime) void refresh(); } }} timeZone="UTC" ariaLabel="Time range" onChange={(value, custom) => { setAllTime(false); setRange(value); setCustomRange(custom); setFilters(old => ({ ...old, ...rangeDates(value, custom) })); }} />,
       ]} />
-      <p className="device-note">{busy ? 'Loading complete range…' : overview ? `${overview.snapshots} daily snapshots · Latest collection ${new Date(overview.collected_at).toLocaleString()} · Refresh to include new uploads.` : 'No data loaded'}</p>
+      {allTime && emptyHistory && <p role="status" className="device-note">No usage history for these filters. All time shows today (UTC) until uploads arrive.</p>}
+      <p className="device-note">{busy ? 'Loading complete range…' : overview ? `${overview.snapshots} daily snapshots${overview.snapshots ? ` · Latest collection ${new Date(overview.collected_at).toLocaleString()}` : ''} · Refresh to include new uploads.` : 'No data loaded'}</p>
       {tab === 'overview' && <>
         <StatCards aggregateMode usage={dashboard?.usage ?? null} dailyAverageUsage={dashboard?.usage ?? null} reserveDailyAverage loading={busy} sparklines={{ requests: null, tokens: null, rpm: null, tpm: null, cacheReadRate: null, cost: null }} />
         <TokenActivityCard aggregateMode activity={dashboard?.activity ?? null} loading={busy} requestIdentity={JSON.stringify(filters)} />

@@ -12,7 +12,23 @@ Model distribution excludes unattributed tokens; overall totals retain them.
 Request health, request counts, throughput, latency and reasoning breakdowns are
 not shown. Daily activity reuses the upstream heatmap with compact cells: up to seven days
 form one keyboard-accessible row; longer ranges use weekly columns. Unsupported
-hour ranges are omitted; the upstream custom picker retains its 365-day limit.
+hour ranges are omitted. The upstream custom picker keeps its default 365-day
+limit; the device entry opts into 3,660 days and year-bearing custom labels.
+
+All time is an optional action in the shared range menu. It resolves the earliest
+stored usage day for the selected device and agent through today UTC. The
+admin-authenticated `GET /v1/usage-boundary?device=…&agent=…` reads only `MIN(day)`,
+with a three-second context deadline and boundary indexes, independent of the
+current date range. Empty history uses today and displays an explanation. The
+intent survives filter changes, refreshes and UTC midnight; refresh (or returning
+to the tab) discovers late older uploads. Selecting another range clears it.
+The resolved dates are shown as a custom range, without clipping to 365 days.
+
+Device rendering explicitly rejects more than 3,660 calendar days or 100,000
+dense model/device chart points; no partial totals are displayed. The existing
+server snapshot, breakdown-cell and query-time limits also remain in force.
+For larger histories, select a narrower custom range or filters. These are
+resource limits, not a claim that arbitrary lifetime histories can be rendered.
 
 Sync uses the upstream modal and matching candidate ordering. The device adapter
 requires an exact catalog identity (or the established `[pi] ` prefix removal)
@@ -43,6 +59,10 @@ Repeat the browser command with `DEVICE_COMPARE_UI=1` to compare both compiled
 entry points, using synthetic fixtures, at 1440×1000 in light and dark themes.
 `DEVICE_SCREENSHOTS` defaults to `/tmp/device-ui-parity`. The comparison checks
 legend toggling, device grouping, range capability controls and sync previews.
+Add `DEVICE_ALL_TIME=1` to the comparison command to exercise All time via
+keyboard, multi-year dates, device/agent changes, late uploads, midnight,
+empty history, explicit range rejection and mobile overflow. Screenshot output
+also includes mobile menus and multi-year custom panels in both themes.
 The regular browser test exercises authenticated storage, editing and sync apply.
 No production data or live catalog is used in these browser fixtures.
 

@@ -45,6 +45,8 @@ const browser = await chromium.launch({headless:true,executablePath:process.env.
 try {
  for(const theme of ['light','dark']) for(const target of ['upstream','device']) {
   const page=await browser.newPage({viewport:{width:1440,height:1000},colorScheme:theme});
+  let boundaryDay = '2024-01-01';
+  let boundaryEmpty = false;
   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
   await page.clock.install({time:new Date('2026-11-09T12:00:00Z')});
   await page.addInitScript(() => localStorage.setItem('cli-proxy-usage-time-range-v1', '7d'));
@@ -63,7 +65,13 @@ try {
   });
   await page.route('**/v1/**',async route=>{
    if(route.request().url().includes('/api/v1/')) return route.fallback();
-   const path=new URL(route.request().url()).pathname;
+   const url=new URL(route.request().url());
+   const path=url.pathname;
+   if(path==='/v1/usage-boundary') {
+     assert.equal(url.searchParams.has('start'),false);
+     return route.fulfill({json:{earliest_day:boundaryEmpty ? null : url.searchParams.get('device') ? '2025-01-01' : url.searchParams.get('agent') ? '2024-06-01' : boundaryDay}});
+   }
+   if(path==='/v1/overview' && boundaryEmpty) return route.fulfill({json:{...overview,total:aggregate('all',0),days:null,models:null,devices:null,agents:null,breakdown:null,snapshots:0}});
    const data={'/v1/overview':overview,'/v1/devices':[{id:'synthetic-device',name:'Example laptop',revoked:false,last_seen:'2026-11-09T12:00:00Z'}],'/v1/pricing/models':prices,'/v1/pricing/sync':preview}[path];
    if(data) return route.fulfill({json:data});
    return route.fallback();
@@ -114,6 +122,9 @@ try {
       await page.waitForTimeout(400);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,`overflow at ${width}`);
       await page.screenshot({path:`${output}/device-${theme}-${width}-overview.png`,fullPage:true});
+      await page.locator('[data-time-range-trigger]:visible').click();
+      await page.screenshot({path:`${output}/device-${theme}-${width}-menu.png`,fullPage:true});
+      await page.keyboard.press('Escape');
     }
   }
   if(target==='device') {
@@ -129,6 +140,48 @@ try {
     const loginRequest=page.waitForRequest(req=>req.url().includes('/v1/overview?'));
     await page.getByRole('button',{name:'Connect',exact:true}).click();
     assert.equal(new URL((await loginRequest).url()).searchParams.get('end'),'2026-11-10');
+  }
+  if(target==='device' && process.env.DEVICE_ALL_TIME) {
+    const trigger=()=>page.locator('[data-time-range-trigger]:visible');
+    const expectDates=async (action,start,end='2026-11-10')=>{
+      const requested=page.waitForRequest(req=>req.url().includes('/v1/overview?') && new URL(req.url()).searchParams.get('start')===start);
+      await action();
+      const params=new URL((await requested).url()).searchParams;
+      assert.equal(params.get('start'),start); assert.equal(params.get('end'),end);
+      await page.getByText('Loading complete range…',{exact:true}).waitFor({state:'hidden'});
+    };
+    await trigger().click();
+    await page.locator('[data-time-range-mode="all"]').focus();
+    await expectDates(()=>page.keyboard.press('Enter'),'2024-01-01');
+    assert.match(await trigger().innerText(),/2024/);
+    for(const width of [1440,390]) {
+      await page.setViewportSize({width,height:1000}); await page.waitForTimeout(500);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`all time overflow ${width}`);
+      await page.screenshot({path:`${output}/device-${theme}-${width}-all-time.png`,fullPage:true});
+      await trigger().click();
+      await page.locator('[data-time-range-mode="custom"]').click();
+      assert.match(await page.locator('[data-custom-endpoint="start"]').innerText(),/Jan 1, 2024/);
+      await page.screenshot({path:`${output}/device-${theme}-${width}-all-time-range.png`,fullPage:true});
+      await page.keyboard.press('Escape');
+    }
+    await page.getByRole('button',{name:'Device',exact:true}).click();
+    await expectDates(()=>page.getByRole('option',{name:'Example laptop',exact:true}).click(),'2025-01-01');
+    await page.getByRole('button',{name:'Device',exact:true}).click();
+    await expectDates(()=>page.getByRole('option',{name:'All devices',exact:true}).click(),'2024-01-01');
+    await page.getByRole('button',{name:'Agent',exact:true}).click();
+    await expectDates(()=>page.getByRole('option',{name:'pi',exact:true}).click(),'2024-06-01');
+    await page.getByRole('button',{name:'Agent',exact:true}).click();
+    await expectDates(()=>page.getByRole('option',{name:'All agents',exact:true}).click(),'2024-01-01');
+    boundaryDay='2023-01-01';
+    await expectDates(()=>page.locator('[data-dashboard-refresh]').click(),'2023-01-01');
+    await expectDates(()=>page.clock.fastForward(86400000),'2023-01-01','2026-11-11');
+    boundaryEmpty=true;
+    await expectDates(()=>page.locator('[data-dashboard-refresh]').click(),'2026-11-11','2026-11-11');
+    await page.getByText('No usage history for these filters.',{exact:false}).waitFor();
+    boundaryEmpty=false; boundaryDay='1900-01-01';
+    await page.locator('[data-dashboard-refresh]').click();
+    await page.getByRole('alert').filter({hasText:'Range exceeds 3660 days'}).waitFor();
+    assert.equal(await page.locator('[data-activity-index]').count(),0);
   }
   assert.deepEqual(errors,[],`${target} ${theme} page errors`);
   await page.close();

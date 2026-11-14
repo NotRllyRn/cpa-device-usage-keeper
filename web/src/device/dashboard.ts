@@ -12,17 +12,35 @@ export function rangeDates(range: UsageTimeRange, custom?: UsageCustomRange, now
   return { start: day(start), end: day(end) };
 }
 
+// Explicit limits, not clipped dates or partial totals. Keep dense chart work bounded.
+export const MAX_DEVICE_RANGE_DAYS = 3660;
+export function validateDashboardRange(start: string, end: string, series = 0) {
+  const days = (Date.parse(end) - Date.parse(start)) / 86400000 + 1;
+  if (!Number.isInteger(days) || days < 1 || days > MAX_DEVICE_RANGE_DAYS) throw new Error(`Range exceeds ${MAX_DEVICE_RANGE_DAYS} days or is invalid. Select a shorter custom range; no partial totals are shown.`);
+  if (days * series > 100000) throw new Error('Range exceeds 100000 chart points. Select a device, agent or shorter range; no partial totals are shown.');
+}
+
+export function allTimeDates(earliest: string | null, now = new Date()) {
+  const today = rangeDates('today', undefined, now).end;
+  return { start: earliest && earliest < today ? earliest : today, end: today };
+}
+
 export function dashboardData(data: Overview, devices: Device[], start: string, end: string) {
+  validateDashboardRange(start, end, data.models.length + data.devices.length);
   const buckets: string[] = [];
   for (let time = Date.parse(start); time <= Date.parse(end); time += 86400000) buckets.push(new Date(time).toISOString().slice(0, 10));
-  const rows = new Map((data.breakdown ?? []).map(row => [row.day, row]));
+  const rows = new Map((data.breakdown ?? []).map(row => [row.day, {
+    models: new Map(row.models.map(value => [value.key, value.total_tokens])),
+    devices: new Map(row.devices.map(value => [value.key, value.total_tokens])),
+  }]));
+  const days = new Map(data.days.map(day => [day.key, day]));
   const items = (values: Aggregate[], dimension: 'models' | 'devices'): UsageComparisonItem[] => values.map(value => ({
     key: value.key, label: dimension === 'devices' ? devices.find(device => device.id === value.key)?.name ?? value.key : value.key,
     // Structural compatibility only: aggregateMode never renders request/reasoning fields.
     requests: 0, failures: 0, reasoning_tokens: 0,
     input_tokens: value.tokens.input + value.tokens.cache_read + value.tokens.cache_write, output_tokens: value.tokens.output, cache_read_tokens: value.tokens.cache_read,
     cache_creation_tokens: value.tokens.cache_write, total_tokens: value.total_tokens, cost: value.complete ? value.known_cost : null,
-    token_series: buckets.map(day => rows.get(day)?.[dimension].find(row => row.key === value.key)?.total_tokens ?? 0),
+    token_series: buckets.map(day => rows.get(day)?.[dimension].get(value.key) ?? 0),
   }));
   const comparisons: UsageOverviewComparisons = { buckets, granularity: 'daily', timezone: 'UTC', models: items(data.models, 'models') };
   const total = data.total;
@@ -36,7 +54,7 @@ export function dashboardData(data: Overview, devices: Device[], start: string, 
   const activity: UsageActivityResponse = {
     window: 'month', grain: 'daily', timezone: 'UTC', total_success: 0, total_failure: 0, success_rate: 0,
     ...tokens(total), rows: 1, columns: buckets.length, bucket_seconds: 86400, window_start: start + 'T00:00:00Z', window_end: end + 'T23:59:59Z',
-    blocks: buckets.map(day => ({ ...tokens(data.days.find(row => row.key === day)), start_time: day + 'T00:00:00Z', end_time: day + 'T23:59:59Z', success: 0, failure: 0, rate: 0 })),
+    blocks: buckets.map(day => ({ ...tokens(days.get(day)), start_time: day + 'T00:00:00Z', end_time: day + 'T23:59:59Z', success: 0, failure: 0, rate: 0 })),
   };
   return { comparisons, devices: items(data.devices, 'devices'), usage, activity };
 }

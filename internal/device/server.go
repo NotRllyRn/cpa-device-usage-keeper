@@ -216,6 +216,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case r.Method == "GET" && r.URL.Path == "/v1/usage-boundary":
+		q := r.URL.Query()
+		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 {
+			fail(w, 400, "invalid filters")
+			return
+		}
+		day, err := s.store.EarliestUsageDay(r.Context(), q.Get("device"), q.Get("agent"))
+		if err != nil {
+			fail(w, 503, "usage boundary unavailable; retry")
+			return
+		}
+		jsonReply(w, 200, map[string]any{"earliest_day": day})
 	case r.Method == "GET" && r.URL.Path == "/v1/overview":
 		q := r.URL.Query()
 		for _, key := range []string{"start", "end"} {

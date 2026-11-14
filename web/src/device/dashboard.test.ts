@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dashboardData, rangeDates } from './dashboard';
+import { dashboardData, rangeDates, allTimeDates, validateDashboardRange } from './dashboard';
 import type { Aggregate, Overview } from './api';
 describe('shared aggregate contracts', () => {
  it('includes both cache categories in shared input without changing stored counts', () => {
@@ -15,6 +15,14 @@ describe('shared aggregate contracts', () => {
 });
 describe('UTC aggregate ranges', () => {
  const now = new Date('2026-01-01T23:59:00Z');
+ it('resolves all history, no history and midnight without a 365-day clip', () => {
+  expect(allTimeDates('2024-01-01',now)).toEqual({start:'2024-01-01',end:'2026-01-01'});
+  expect(allTimeDates(null,now)).toEqual({start:'2026-01-01',end:'2026-01-01'});
+  expect(allTimeDates('2024-01-01',new Date('2026-01-02T00:01:00Z')).end).toBe('2026-01-02');
+  expect(() => validateDashboardRange('2024-01-01','2026-01-01')).not.toThrow();
+  expect(() => validateDashboardRange('1900-01-01','2026-01-01')).toThrow('no partial totals');
+  expect(() => validateDashboardRange('2024-01-01','2026-01-01',1000)).toThrow('100000 chart points');
+ });
  it('refreshes relative dates after midnight while preserving custom days', () => {
   expect(rangeDates('today', undefined, new Date('2026-01-02T00:01:00Z'))).toEqual({start:'2026-01-02',end:'2026-01-02'});
   expect(rangeDates('custom', {unit:'day',start:'2025-12-01',end:'2025-12-02'},now)).toEqual({start:'2025-12-01',end:'2025-12-02'});

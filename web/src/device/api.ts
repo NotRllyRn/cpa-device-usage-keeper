@@ -20,7 +20,11 @@ export class DeviceAPI {
     this.controller.signal.throwIfAborted();
     return value as T;
   }
-  overview(filters: Filters) { return this.request<Overview>('/overview?' + new URLSearchParams({ ...filters })); }
+  async overview(filters: Filters) {
+    const data = await this.request<Overview>('/overview?' + new URLSearchParams({ ...filters }));
+    return { ...data, days: data.days ?? [], models: data.models ?? [], devices: data.devices ?? [], agents: data.agents ?? [], breakdown: data.breakdown ?? [] };
+  }
+  boundary({ device, agent }: Pick<Filters, 'device' | 'agent'>) { return this.request<{ earliest_day: string | null }>('/usage-boundary?' + new URLSearchParams({ device, agent })); }
   devices() { return this.request<Device[]>('/devices'); }
   async prices() { return (await this.request<ModelPricingConfig[]>('/pricing/models')).map(p => ({ ...p, branches: p.branches ?? [], conditional_multipliers: p.conditional_multipliers ?? [] })); }
 }

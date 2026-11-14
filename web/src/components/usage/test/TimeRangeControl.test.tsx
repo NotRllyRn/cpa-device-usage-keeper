@@ -47,6 +47,18 @@ describe('TimeRangeControl', () => {
     await act(async () => button.click());
   };
 
+  it('offers All time only when opted in and keeps multi-year custom dates', async () => {
+    await renderControl('7d');
+    await click('[data-time-range-trigger="desktop"]');
+    expect(document.querySelector('[data-time-range-mode="all"]')).toBeNull();
+    const onSelect = vi.fn();
+    await act(async () => root.render(<TimeRangeControl dailyOnly value="custom" customRange={{unit:'day',start:'2024-01-01',end:'2026-11-09'}} onChange={vi.fn()} ariaLabel="Range" timeZone="UTC" maxCustomDayRangeDays={3660} showCustomRangeYear allTime={{active:true,onSelect}} />));
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.textContent).toContain('2024');
+    expect(document.querySelector('[data-time-range-mode="all"]')?.getAttribute('aria-pressed')).toBe('true');
+    await click('[data-time-range-mode="all"]');
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
   it('renders labeled double-pill shells for desktop and mobile triggers', async () => {
     await renderControl('8h');
 

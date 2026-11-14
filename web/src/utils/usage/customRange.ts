@@ -250,14 +250,14 @@ export const clampStoredUsageRangeStateToCurrentBounds = (
 
 export const formatCustomRangeLabel = (
   range: UsageCustomRange,
-  { locale, timeZone }: { locale?: string; timeZone: string },
+  { locale, timeZone, includeYear = false }: { locale?: string; timeZone: string; includeYear?: boolean },
 ): string => {
   if (range.unit === 'day') {
     const parseDateKey = (value: string) => {
       const [year, month, day] = value.split('-').map(Number);
       return new Date(Date.UTC(year, month - 1, day));
     };
-    const formatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const formatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', ...(includeYear ? { year: 'numeric' as const } : {}), timeZone: 'UTC' });
     return `${formatter.format(parseDateKey(range.start))} – ${formatter.format(parseDateKey(range.end))}`;
   }
 

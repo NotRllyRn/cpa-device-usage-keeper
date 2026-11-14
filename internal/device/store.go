@@ -74,7 +74,10 @@ func OpenStore(dir string) (*Store, error) {
 	_, err = db.Exec(`PRAGMA max_page_count=262144;
  CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,revoked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_seen TEXT);
  CREATE TABLE IF NOT EXISTS device_prices(model TEXT PRIMARY KEY,payload BLOB NOT NULL);
- CREATE TABLE IF NOT EXISTS snapshots(device_id TEXT NOT NULL REFERENCES devices(id),agent TEXT NOT NULL,day TEXT NOT NULL,revision INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(device_id,agent,day));`)
+ CREATE TABLE IF NOT EXISTS snapshots(device_id TEXT NOT NULL REFERENCES devices(id),agent TEXT NOT NULL,day TEXT NOT NULL,revision INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(device_id,agent,day));
+ CREATE INDEX IF NOT EXISTS snapshots_day ON snapshots(day);
+ CREATE INDEX IF NOT EXISTS snapshots_agent_day ON snapshots(agent,day);
+ CREATE INDEX IF NOT EXISTS snapshots_device_day ON snapshots(device_id,day);`)
 	if err != nil {
 		db.Close()
 		return nil, err
