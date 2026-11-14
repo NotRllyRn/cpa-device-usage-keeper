@@ -95,6 +95,21 @@
   color: var(--text-secondary);
 }
 
+button.analysisLegendItem {
+  font-family: inherit;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    color: var(--text-primary);
+    border-color: currentColor;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 2px;
+  }
+}
+
 .analysisLegendDot {
   width: 10px;
   height: 10px;

@@ -26,8 +26,8 @@ async function shot(page,path){await page.evaluate(()=>window.scrollTo(0,0));awa
 const browser=await chromium.launch({headless:true,executablePath:process.env.DEVICE_TEST_CHROMIUM});
 try{
 for(const theme of ['light','dark'])for(const target of ['upstream','device']){
- const page=await browser.newPage({viewport:{width:1440,height:1000},colorScheme:theme});const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.clock.install({time:new Date('2026-11-09T12:00:00Z')});
+ const page=await browser.newPage({viewport:{width:1440,height:1000},colorScheme:theme,reducedMotion:'reduce'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.clock.setFixedTime(new Date('2026-11-09T12:00:00Z'));
  let empty=false,zero=false,pricingMode='partial';const requests=[];
  await page.route('**/api/v1/**',async route=>{const path=new URL(route.request().url()).pathname.replace('/api/v1','');await route.fulfill({json:{'/startup/status':{phase:'ready',message:'',progress:null},'/auth/session':{authenticated:true,role:'admin'},'/usage/analysis':analysis,'/usage/analysis/latency':{supported:false,points:[],density:[]},'/usage/overview':{usage:{total_tokens:35000},summary:{},timezone:'UTC'},'/usage/overview/comparisons':{buckets:[],models:[]},'/usage/activity':{blocks:[]},'/pricing/models':{models:[]},'/status':{timezone:'UTC'},'/cpa/api-keys/options':{items:[]}}[path]??{}});});
  await page.route('**/v1/**',async route=>{if(route.request().url().includes('/api/v1/'))return route.fallback();const url=new URL(route.request().url());requests.push(url);let data={'/v1/session':{authenticated:true},'/v1/devices':[{id:'laptop',name:'Example laptop',revoked:false}],'/v1/pricing/models':[], '/v1/usage-boundary':{earliest_day:'2026-11-03'}}[url.pathname];
@@ -36,11 +36,23 @@ for(const theme of ['light','dark'])for(const target of ['upstream','device']){
  if(data && ['complete','unknown'].includes(pricingMode) && ['/v1/overview','/v1/analysis'].includes(url.pathname))data=JSON.parse(JSON.stringify(data),(key,value)=>key==='complete'?pricingMode==='complete':key==='known_cost'&&pricingMode==='unknown'?0:key==='coverage'?{priced:pricingMode==='complete'?1:0,missing:pricingMode==='unknown'?1:0,conditional:0,unattributed_tokens:0}:value);
  if(data!==undefined)return route.fulfill({json:data});throw Error('Unexpected endpoint '+url.pathname);});
  await page.goto(target==='device'?process.env.DEVICE_TEST_URL:upstream);await page.waitForTimeout(1000);
- if(target==='device') { const text=await page.locator('main').innerText();assert.match(text,/Partial cost subtotal/);assert.match(text,/Partial cost \/ day/);assert.doesNotMatch(text,/Set pricing to calculate cost|Known \$/);await shot(page,`${output}/device-${theme}-1440-overview-partial.png`); }
+ if(target==='device') { await page.getByText('Partial cost subtotal',{exact:true}).first().waitFor();const text=await page.locator('main').innerText();assert.match(text,/Partial cost subtotal/);assert.match(text,/Partial cost \/ day/);assert.doesNotMatch(text,/Set pricing to calculate cost|Known \$/);await shot(page,`${output}/device-${theme}-1440-overview-partial.png`); }
  await navigate(page,'Analysis');
  if(target==='upstream'){await page.locator('[data-time-range-trigger]:visible').click();await page.locator('[data-time-range-mode="day"]').click();await page.keyboard.press('Escape');}
  await page.getByRole('heading',{name:'Token Usage Over Time',exact:true}).waitFor();await page.waitForTimeout(1300);
- for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.waitForTimeout(600);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${target} overflow ${width}`);await shot(page,`${output}/${target}-${theme}-${width}-analysis.png`);}
+ for(const width of [1440,390]){
+  await page.setViewportSize({width,height:1000});await page.waitForTimeout(600);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${target} overflow ${width}`);await shot(page,`${output}/${target}-${theme}-${width}-analysis.png`);
+  if(target==='device'){
+   const group=page.getByRole('group',{name:'Token chart metric',exact:true});const buttons=group.getByRole('button');assert.equal(await buttons.count(),6);
+   for(let index=1;index<6;index++){
+    await buttons.nth(index).focus();await page.keyboard.press(index%2?'Enter':'Space');
+    assert.equal(await buttons.nth(index).getAttribute('aria-pressed'),'true');assert.equal(await group.locator('[aria-pressed="true"]').count(),1);
+    assert.doesNotMatch(await group.innerText(),/Average|Unattributed/);
+    await shot(page,`${output}/device-${theme}-${width}-metric-${index}.png`);
+   }
+   await buttons.first().focus();await page.keyboard.press('Enter');assert.equal(await buttons.first().getAttribute('aria-pressed'),'true');assert.match(await group.innerText(),/Average/);
+  }
+ }
  if(target==='device'){
   const body=await page.locator('main').innerText();assert.match(body,/Unknown \(known/);assert.doesNotMatch(body,/Requests\s+0|RPM\s+0|TPM\s+0|TTFT\s+0/);
   await page.getByRole('tablist',{name:'Usage Distribution'}).getByRole('tab',{name:'Model',exact:true}).click();const ranking=page.getByRole('list').first().getByRole('button').first();await ranking.click();assert.equal(await ranking.getAttribute('aria-pressed'),'true');await ranking.click();assert.equal(await ranking.getAttribute('aria-pressed'),'false');
@@ -56,6 +68,8 @@ for(const theme of ['light','dark'])for(const target of ['upstream','device']){
   empty=false;zero=true;await page.locator('[data-dashboard-refresh]').click();await page.waitForTimeout(300);assert.doesNotMatch(await page.locator('main').innerText(),/Unknown|Set pricing to calculate cost/);
   zero=false;pricingMode='unknown';await page.locator('[data-dashboard-refresh]').click();await page.waitForTimeout(300);assert.match(await page.locator('main').innerText(),/Unknown/);assert.doesNotMatch(await page.locator('main').innerText(),/Set pricing to calculate cost/);await shot(page,`${output}/device-${theme}-390-overview-unknown.png`);
   pricingMode='complete';await page.locator('[data-dashboard-refresh]').click();await page.waitForTimeout(300);assert.match(await page.locator('main').innerText(),/All reported usage priced/);assert.doesNotMatch(await page.locator('main').innerText(),/Partial cost|Unknown|Set pricing to calculate cost/);await shot(page,`${output}/device-${theme}-390-overview-complete.png`);
+  await navigate(page,'Analysis');const metrics=page.getByRole('group',{name:'Token chart metric',exact:true});await metrics.getByRole('button',{name:'Total Cost',exact:true}).click();
+  for(const width of [390,1440]){await page.setViewportSize({width,height:1000});await page.waitForTimeout(600);await page.waitForFunction(()=>{const canvas=document.querySelector('canvas');return canvas&&Math.abs(canvas.getBoundingClientRect().width-canvas.parentElement.getBoundingClientRect().width)<2;});await shot(page,`${output}/device-${theme}-${width}-cost-complete.png`);}
  }
  assert.deepEqual(errors,[]);await page.close();
 }

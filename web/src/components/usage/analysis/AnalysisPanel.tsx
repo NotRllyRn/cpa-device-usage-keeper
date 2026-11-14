@@ -916,6 +916,9 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay
   }), [t]);
   const chartTheme = useMemo(() => getChartTheme(isDark), [isDark]);
   const averageTokenTotal = useMemo(() => calculateAverageTotalTokens(rows), [rows]);
+  const [selectedMetric, setSelectedMetric] = useState<'all' | 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'cost'>('all');
+  const metric = aggregateMode ? selectedMetric : 'all';
+  const hasUnavailableCost = summary?.cost_available === false || rows.some((row) => !row.costAvailable);
   const chartData = useMemo(() => {
     const data = buildAnalysisTokenChartData(rows, tokenLabels);
     if (!aggregateMode) return data;
@@ -924,18 +927,27 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay
     const cost = data.datasets.find(dataset => dataset.yAxisID === 'cost');
     if (cost) cost.data = rows.map(row => row.costAvailable ? row.cost : null);
     data.datasets.push({ label: 'Unattributed', data: rows.map(row => Math.max(0, row.total - row.input - row.output - row.cacheRead - row.cacheWrite)), backgroundColor: '#94a3b8', stack: 'tokens', yAxisID: 'tokens' });
+    if (metric !== 'all') data.datasets = data.datasets.filter(dataset => dataset.label === tokenLabels[metric]);
+    if (cost && hasUnavailableCost) cost.label = `${tokenLabels.cost} (partial / unknown)`;
     return data;
-  }, [aggregateMode, rows, tokenLabels]);
+  }, [aggregateMode, hasUnavailableCost, metric, rows, tokenLabels]);
   const chartOptions = useMemo(() => {
     const options = buildAnalysisTokenChartOptions({ chartTheme, isMobile, totalTokens: rows.map(row => row.total), totalLabel: tokenLabels.total, averageTokenTotal });
-    if (aggregateMode && options.scales?.requests) options.scales.requests.display = false;
+    if (aggregateMode && options.scales) {
+      if (options.scales.requests) options.scales.requests.display = false;
+      if (options.scales.tokens) options.scales.tokens.display = metric !== 'cost';
+      if (options.scales.cost) options.scales.cost.display = metric === 'all' || metric === 'cost';
+      if (metric !== 'all' && options.plugins) {
+        delete options.plugins.analysisTokenAverageLine;
+        if (options.plugins.tooltip?.callbacks) delete options.plugins.tooltip.callbacks.footer;
+      }
+    }
     return options;
-  }, [aggregateMode, averageTokenTotal, chartTheme, isMobile, rows, tokenLabels.total]);
+  }, [aggregateMode, metric, averageTokenTotal, chartTheme, isMobile, rows, tokenLabels.total]);
   const legendItems = useMemo(() => {
     const items = buildTokenLegendItems(tokenLabels, averageTokenTotal, chartTheme.averageLine);
     return aggregateMode ? [...items.filter(item => item.label !== tokenLabels.requests && item.label !== tokenLabels.reasoning), { label: 'Unattributed', color: '#94a3b8' }] : items;
   }, [aggregateMode, averageTokenTotal, chartTheme.averageLine, tokenLabels]);
-  const hasUnavailableCost = summary?.cost_available === false || rows.some((row) => !row.costAvailable);
   const totalTokens = rows.reduce((sum, row) => sum + row.total, 0);
   const totalCost = toNumber(summary?.total_cost_usd);
   return (
@@ -967,13 +979,17 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay
         <div className={styles.emptyState}>{t('usage_stats.no_data')}</div>
       ) : (
         <div className={styles.analysisChartSurface}>
-          <div className={styles.analysisChartLegend} aria-label="Token chart legend">
-            {legendItems.map((item) => (
-              <div key={item.label} className={styles.analysisLegendItem} title={item.label}>
-                <span className={styles.analysisLegendDot} style={{ backgroundColor: item.color }} />
-                <span className={styles.analysisLegendLabel}>{item.label}</span>
-              </div>
-            ))}
+          <div className={styles.analysisChartLegend} role={aggregateMode ? 'group' : undefined} aria-label={aggregateMode ? 'Token chart metric' : 'Token chart legend'}>
+            {aggregateMode && <button type="button" className={styles.analysisLegendItem} aria-pressed={metric === 'all'} onClick={() => setSelectedMetric('all')}>All</button>}
+            {legendItems.map((item) => {
+              const key = aggregateMode ? (['input', 'output', 'cacheRead', 'cacheWrite', 'cost'] as const).find(key => tokenLabels[key] === item.label) : undefined;
+              if (aggregateMode && !key && metric !== 'all') return null;
+              const label = aggregateMode && key === 'cost' && hasUnavailableCost ? `${item.label} (partial / unknown)` : item.label;
+              const content = <><span className={styles.analysisLegendDot} style={{ backgroundColor: item.color }} /><span className={styles.analysisLegendLabel}>{label}</span></>;
+              return key ? <button key={key} type="button" className={styles.analysisLegendItem} title={label} aria-pressed={metric === key} onClick={() => setSelectedMetric(key)}>{content}</button> : (
+                <div key={item.label} className={styles.analysisLegendItem} title={label}>{content}</div>
+              );
+            })}
           </div>
           <div className={styles.tokenChartFrame}>
             <Bar data={chartData} options={chartOptions} plugins={[drawRequestsLineOnTopPlugin, drawTokenAverageLinePlugin]} />
