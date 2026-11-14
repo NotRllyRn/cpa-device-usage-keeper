@@ -1,6 +1,7 @@
 package device
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"testing"
@@ -16,7 +17,13 @@ func TestBrowser(t *testing.T) {
 	}
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
-	s, err := Start(Config{Listen: "127.0.0.1:0", DataDir: dir})
+	reserved, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reserved.Addr().String()
+	reserved.Close()
+	s, err := Start(Config{Listen: address, DataDir: dir, SessionOrigin: "http://" + address})
 	if err != nil {
 		t.Fatal(err)
 	}

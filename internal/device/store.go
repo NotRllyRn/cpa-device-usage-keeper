@@ -72,6 +72,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`PRAGMA max_page_count=262144;
+ CREATE TABLE IF NOT EXISTS admin_sessions(token_hash TEXT PRIMARY KEY,admin_hash TEXT NOT NULL,expires_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,revoked INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,last_seen TEXT);
  CREATE TABLE IF NOT EXISTS device_prices(model TEXT PRIMARY KEY,payload BLOB NOT NULL);
  CREATE TABLE IF NOT EXISTS snapshots(device_id TEXT NOT NULL REFERENCES devices(id),agent TEXT NOT NULL,day TEXT NOT NULL,revision INTEGER NOT NULL,digest TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(device_id,agent,day));

@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,14 +26,17 @@ import (
 // Config deliberately separates upload listener auth from CPA credentials.
 // Plain HTTP is intended behind a TLS-terminating reverse proxy.
 type Config struct {
-	Listen  string `json:"listen"`
-	DataDir string `json:"data_dir"`
+	Listen        string `json:"listen"`
+	DataDir       string `json:"data_dir"`
+	SessionOrigin string `json:"session_origin,omitempty"`
 }
 type Server struct {
 	store    *Store
 	http     *http.Server
 	listener net.Listener
 	admin    string
+	origin   *url.URL
+	login    loginBudget
 	slots    chan struct{}
 	once     sync.Once
 	closeErr error
@@ -41,6 +45,10 @@ type Server struct {
 func Start(cfg Config) (*Server, error) {
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:8788"
+	}
+	origin, err := sessionOrigin(cfg.SessionOrigin, cfg.Listen)
+	if err != nil {
+		return nil, err
 	}
 	if !filepath.IsAbs(cfg.DataDir) {
 		return nil, errors.New("data_dir must be absolute")
@@ -100,7 +108,7 @@ func Start(cfg Config) (*Server, error) {
 		store.Close()
 		return nil, err
 	}
-	s := &Server{store: store, listener: listener, admin: admin, slots: make(chan struct{}, 8)}
+	s := &Server{store: store, listener: listener, admin: admin, origin: origin, slots: make(chan struct{}, 8)}
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 * 1024}
 	go func() { _ = s.http.Serve(listener) }()
 	return s, nil
@@ -156,8 +164,8 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	// No CORS: browser mutations require explicit bearer authentication. Never
-	// use ambient cookies or query-string tokens on this listener.
+	// No CORS. Cookie mutations require the configured browser Origin;
+	// bearer uploads and API clients retain their separate authentication.
 	select {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
@@ -211,9 +219,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(http.FS(web.DeviceAssets())).ServeHTTP(w, r)
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(bearer(r)), []byte(s.admin)) != 1 {
-		fail(w, 401, "unauthorized")
+	if r.URL.Path == "/v1/session" {
+		s.serveSession(w, r)
 		return
+	}
+	if r.URL.Path == "/v1/session/logout" && r.Method == http.MethodPost {
+		s.logout(w, r)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(bearer(r)), []byte(s.admin)) != 1 {
+		if r.Header.Get("Authorization") != "" || !s.validSession(r) {
+			fail(w, 401, "unauthorized")
+			return
+		}
+		if !isRead(r.Method) && !s.sessionMutation(r) {
+			fail(w, 403, "same-origin request required")
+			return
+		}
 	}
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/v1/usage-boundary":

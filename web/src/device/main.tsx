@@ -19,7 +19,7 @@ import { TimeRangeControl } from '@/components/usage/TimeRangeControl';
 import type { UsageTimeRange, UsageCustomRange } from '@/lib/types';
 import { dashboardData, rangeDates, allTimeDates, validateDashboardRange, MAX_DEVICE_RANGE_DAYS, formatDeviceDay } from './dashboard';
 import '@/lib/chartjs';
-import { DeviceAPI, type Overview, type Device, type Filters } from './api';
+import { DeviceAPI, DeviceAPIError, type Overview, type Device, type Filters } from './api';
 import '@/index.css';
 import '@/App.css';
 import '@/styles/reset.scss';
@@ -151,8 +151,23 @@ function App() {
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    let active = true;
+    const candidate = new DeviceAPI();
+    void candidate.request('/session').then(() => { if (active) setAPI(candidate); })
+      .catch(e => { candidate.close(); if (active && !(e instanceof DeviceAPIError && e.status === 401)) setError(message(e)); })
+      .finally(() => { if (active) setChecking(false); });
+    return () => { active = false; candidate.close(); };
+  }, []);
   useEffect(() => () => api?.close(), [api]);
-  if (api) return <Dashboard api={api} onLogout={() => { api.close(); setAPI(null); setToken(''); }} />;
-  return <div className="device-login"><div className={styles.statCard}><h1>Device Usage Keeper</h1><p>Connect with the plugin admin token, not CPA credentials.</p><form onSubmit={e => { e.preventDefault(); if (busy) return; setBusy(true); setError(''); const candidate = new DeviceAPI(token); setToken(''); void candidate.devices().then(() => setAPI(candidate)).catch(e => { candidate.close(); setError(message(e)); }).finally(() => setBusy(false)); }}><label>Admin token<input type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} required /></label><Button type="submit" disabled={busy}>Connect</Button></form>{error && <p role="alert">{error}</p>}<p>Token stays in memory only. Use your HTTPS reverse proxy.</p></div></div>;
+  if (checking) return <div className="device-login" role="status">Checking your session…</div>;
+  if (api) return <>{error && <p className="device-error" role="alert">{error}</p>}<Dashboard api={api} onLogout={() => {
+    if (busy) return;
+    setBusy(true); setError('');
+    void api.request('/session/logout', 'POST').then(() => { api.close(); setAPI(null); setToken(''); })
+      .catch(e => setError(message(e))).finally(() => setBusy(false));
+  }} /></>;
+  return <div className="device-login"><div className={styles.statCard}><h1>Device Usage Keeper</h1><p>Connect with the plugin admin token, not CPA credentials.</p><form onSubmit={e => { e.preventDefault(); if (busy) return; setBusy(true); setError(''); const candidate = new DeviceAPI(); const credential = token; setToken(''); void candidate.request('/session', 'POST', {token: credential}).then(() => setAPI(candidate)).catch(e => { candidate.close(); setError(message(e)); }).finally(() => setBusy(false)); }}><label>Admin token<input type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} required /></label><Button type="submit" disabled={busy}>Connect</Button></form>{error && <p role="alert">{error}</p>}<p>Stay signed in for 30 days on this browser. Only an HttpOnly session cookie is saved—not your admin token. Sign out on shared devices.</p></div></div>;
 }
 createRoot(document.getElementById('root')!).render(<I18nextProvider i18n={i18n}><App /></I18nextProvider>);

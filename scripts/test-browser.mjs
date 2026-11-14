@@ -11,6 +11,23 @@ try {
   await page.getByLabel('Admin token').fill(process.env.DEVICE_TEST_TOKEN);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await page.getByText('130', { exact: true }).first().waitFor();
+  const session = (await page.context().cookies()).find(c=>c.name==='device_session_local');
+  assert.ok(session?.httpOnly && session.sameSite==='Strict');
+  assert.notEqual(session.value,process.env.DEVICE_TEST_TOKEN);
+  assert.ok(session.expires>Date.now()/1000+29*86400);
+  assert.equal(await page.evaluate(()=>document.cookie.includes('device_session')),false);
+  await page.evaluate(()=>sessionStorage.clear());
+  let releaseSession;
+  const sessionGate=new Promise(resolve=>{releaseSession=resolve;});
+  await page.route('**/v1/session',async route=>{await sessionGate;await route.continue();});
+  await page.reload();
+  await page.getByRole('status').filter({hasText:'Checking your session'}).waitFor();
+  assert.equal(await page.getByLabel('Admin token').count(),0,'no login flash during session check');
+  releaseSession();
+  await page.getByText('130', { exact: true }).first().waitFor();
+  await page.unroute('**/v1/session');
+  assert.equal(await page.getByLabel('Admin token').count(),0);
+  assert.equal(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage})).then(text=>text.includes(process.env.DEVICE_TEST_TOKEN)),false);
   assert.match(await page.locator('body').innerText(), /Known/);
   assert.match(await page.locator('body').innerText(), /Unavailable/);
   // Keeper toolbar starts collapsed. Open its page selector to navigate.
@@ -58,6 +75,11 @@ try {
   await page.getByRole('menuitem', { name: /logout|log out|sign out/i }).click();
   await page.getByRole('button', { name: 'Connect', exact: true }).waitFor();
   assert.equal(await page.locator('output').count(), 0);
+  assert.equal((await page.context().cookies()).some(c=>c.name==='device_session_local'),false);
+  await page.reload();
+  await page.getByLabel('Admin token').waitFor();
+  const replay=await page.request.get(process.env.DEVICE_TEST_URL+'/v1/session',{headers:{Cookie:`device_session_local=${session.value}`}});
+  assert.equal(replay.status(),401);
   assert.deepEqual(errors, []);
-  console.log('PASS: browser login, aggregate totals, disabled metrics, Keeper pricing/settings, enrollment, logout');
+  console.log('PASS: HttpOnly session login, reload after clearing sessionStorage, revoked-cookie replay rejection, aggregate totals, disabled metrics, Keeper pricing/settings, enrollment, logout');
 } finally { await browser.close(); }

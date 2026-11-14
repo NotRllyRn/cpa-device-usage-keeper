@@ -36,6 +36,7 @@ Plugin configuration YAML:
 listen: "0.0.0.0:8788"
 data_dir: "/var/lib/device-usage-keeper"
 dashboard_url: "https://usage.example.com"
+session_origin: "https://usage.example.com"
 ```
 
 The default bind is `127.0.0.1:8788`. `data_dir` must be an absolute private
@@ -44,13 +45,47 @@ health at `/healthz`, and authenticated APIs below `/v1`. Point a TLS reverse
 proxy at the chosen port. Restrict direct port access; the listener itself is
 plain HTTP. The optional HTTPS `dashboard_url` supplies the CPA iframe target.
 Without it, CPA displays a configuration notice. No upload token is placed in
-an iframe URL. Bind or storage changes require a CPA restart.
+an iframe URL. Bind, storage or session-origin changes require a CPA restart.
 
 On first start a random admin token is written to `data_dir/admin-token` with
-0600 permissions. Retrieve it privately and enter it in the dashboard; it stays
-in browser memory. Enrollment returns a separate upload-only token once.
+0600 permissions. Retrieve it privately and enter it in the dashboard. Login
+exchanges it for a random 30-day HttpOnly session cookie; the admin token is never
+stored in a cookie or browser storage. Enrollment returns a separate upload-only token once.
 Revocation prevents further uploads, including retries, without deleting history.
 The admin token is not a CPA management token. Never commit or log these files.
+
+## Browser sessions
+
+Set `session_origin` to the exact public HTTPS origin (scheme, host and optional
+port; no path or trailing slash). Without it, browser login is disabled; existing
+bearer API clients remain supported. Cookies are Secure even when the listener
+uses HTTP behind your TLS proxy. Forwarded headers are not trusted. Keep the
+backend private and proxy the dashboard and `/v1` under the same origin.
+
+Sessions expire 30 days after login (not sliding), survive CPA restarts, and are
+stored only as SHA-256 digests in SQLite. Sign out revokes the current session.
+Changing `admin-token` **and restarting CPA** invalidates all old sessions. At
+most 128 sessions are retained; a new login evicts the oldest when full. Expired
+and old-token records are removed during login. Login has a global budget of 10
+attempts per minute, including successes; restart resets that in-memory budget.
+Keep proxy rate limits as a second layer. Backups contain session hashes: restoring
+an old database can restore old revocation state; rotate the admin token on restore
+if all previous sessions must be invalidated.
+
+Cookies use host-only `__Host-`, HttpOnly, Path=/ and SameSite=Strict. All cookie
+mutations, including login and POST logout, require the exact configured Origin;
+missing, `null`, cross-site and foreign origins are rejected. Bearer clients do
+not need Origin. Session cookies never authorize device uploads. Startup checks
+the session before displaying the login form. The prior adapter used memory-only
+tokens, so there is no stored token to migrate or preserve.
+
+CPA and the dashboard should use HTTPS sibling hosts on the same registrable
+site. Cross-site iframes cannot use Strict cookies: open the dashboard directly
+instead. Browser third-party-cookie policies may impose further restrictions.
+There is no SameSite=None exception. For local tests only, an explicitly configured
+`http://127.0.0.1:PORT` (or localhost) origin is allowed with a loopback-only
+listener and loopback peer. That uses a separate non-Secure local cookie; never
+expose that test listener through a public proxy.
 
 ## Accounting and persistence
 

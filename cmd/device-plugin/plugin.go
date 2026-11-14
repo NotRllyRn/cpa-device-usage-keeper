@@ -34,7 +34,7 @@ func handleMethod(method string, request []byte) ([]byte, error) {
 		}
 		return okEnvelope(map[string]any{
 			"schema_version": schemaVersion,
-			"metadata":       map[string]any{"Name": "Device Usage Keeper", "Version": "0.1.0-dev", "Author": "NotRllyRn", "GitHubRepository": "https://github.com/NotRllyRn/cpa-device-usage-keeper", "ConfigFields": []map[string]string{{"Name": "listen", "Type": "string", "Description": "HTTP bind address, default 127.0.0.1:8788; put behind TLS reverse proxy"}, {"Name": "data_dir", "Type": "string", "Description": "Absolute private persistent directory (0700)"}, {"Name": "dashboard_url", "Type": "string", "Description": "Optional public HTTPS dashboard URL for CPA iframe"}}},
+			"metadata":       map[string]any{"Name": "Device Usage Keeper", "Version": "0.1.0-dev", "Author": "NotRllyRn", "GitHubRepository": "https://github.com/NotRllyRn/cpa-device-usage-keeper", "ConfigFields": []map[string]string{{"Name": "listen", "Type": "string", "Description": "HTTP bind address, default 127.0.0.1:8788; put behind TLS reverse proxy"}, {"Name": "data_dir", "Type": "string", "Description": "Absolute private persistent directory (0700)"}, {"Name": "session_origin", "Type": "string", "Description": "Exact public HTTPS origin for 30-day browser sessions, e.g. https://usage.example.com"}, {"Name": "dashboard_url", "Type": "string", "Description": "Optional public HTTPS dashboard URL for CPA iframe"}}},
 			"capabilities":   map[string]bool{"management_api": true},
 		})
 	case "management.register":

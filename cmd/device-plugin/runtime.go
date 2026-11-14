@@ -23,12 +23,13 @@ func configure(raw []byte) error {
 	runtime.Lock()
 	defer runtime.Unlock()
 	var cfg struct {
-		Enabled      *bool  `yaml:"enabled"`
-		Priority     int    `yaml:"priority"`
-		Store        any    `yaml:"store"`
-		Listen       string `yaml:"listen"`
-		DataDir      string `yaml:"data_dir"`
-		DashboardURL string `yaml:"dashboard_url"`
+		Enabled       *bool  `yaml:"enabled"`
+		Priority      int    `yaml:"priority"`
+		Store         any    `yaml:"store"`
+		Listen        string `yaml:"listen"`
+		DataDir       string `yaml:"data_dir"`
+		SessionOrigin string `yaml:"session_origin"`
+		DashboardURL  string `yaml:"dashboard_url"`
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	decoder.KnownFields(true)
@@ -47,10 +48,10 @@ func configure(raw []byte) error {
 			return errors.New("dashboard_url must be an HTTPS URL without credentials, query or fragment")
 		}
 	}
-	next := device.Config{Listen: cfg.Listen, DataDir: cfg.DataDir}
+	next := device.Config{Listen: cfg.Listen, DataDir: cfg.DataDir, SessionOrigin: cfg.SessionOrigin}
 	if runtime.server != nil {
 		if runtime.config != next {
-			return errors.New("listen/data_dir changes require CPA restart")
+			return errors.New("listen/data_dir/session_origin changes require CPA restart")
 		}
 		runtime.dashboardURL = cfg.DashboardURL
 		return nil

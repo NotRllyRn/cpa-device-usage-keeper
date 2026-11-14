@@ -47,6 +47,7 @@ try {
   const page=await browser.newPage({viewport:{width:1440,height:1000},colorScheme:theme});
   let boundaryDay = '2024-01-01';
   let boundaryEmpty = false;
+  let authenticated = false;
   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
   await page.clock.install({time:new Date('2026-11-09T12:00:00Z')});
   await page.addInitScript(() => localStorage.setItem('cli-proxy-usage-time-range-v1', '7d'));
@@ -67,6 +68,10 @@ try {
    if(route.request().url().includes('/api/v1/')) return route.fallback();
    const url=new URL(route.request().url());
    const path=url.pathname;
+   if(path==='/v1/session') {
+     if(route.request().method()==='POST') { authenticated=true; return route.fulfill({status:204}); }
+     return route.fulfill({status:authenticated?200:401,json:{authenticated}});
+   }
    if(path==='/v1/usage-boundary') {
      assert.equal(url.searchParams.has('start'),false);
      return route.fulfill({json:{earliest_day:boundaryEmpty ? null : url.searchParams.get('device') ? '2025-01-01' : url.searchParams.get('agent') ? '2024-06-01' : boundaryDay}});
@@ -123,7 +128,9 @@ try {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,`overflow at ${width}`);
       await page.screenshot({path:`${output}/device-${theme}-${width}-overview.png`,fullPage:true});
       await page.locator('[data-time-range-trigger]:visible').click();
-      await page.screenshot({path:`${output}/device-${theme}-${width}-menu.png`,fullPage:true});
+      await page.waitForTimeout(400);
+      assert.match(await page.getByRole('dialog',{name:'Time range',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),/^rgb\(/);
+      await page.screenshot({path:`${output}/device-${theme}-${width}-menu.png`});
       await page.keyboard.press('Escape');
     }
   }
@@ -134,11 +141,9 @@ try {
     const params=new URL((await nextRequest).url()).searchParams;
     assert.equal(params.get('start'),'2026-11-04');
     assert.equal(params.get('end'),'2026-11-10');
-    // A fresh login resolves relative dates now, not at JS module evaluation.
-    await page.reload();
-    await page.getByLabel('Admin token').fill('synthetic-only');
+    // Session restoration resolves relative dates now, not at module evaluation.
     const loginRequest=page.waitForRequest(req=>req.url().includes('/v1/overview?'));
-    await page.getByRole('button',{name:'Connect',exact:true}).click();
+    await page.reload();
     assert.equal(new URL((await loginRequest).url()).searchParams.get('end'),'2026-11-10');
   }
   if(target==='device' && process.env.DEVICE_ALL_TIME) {
