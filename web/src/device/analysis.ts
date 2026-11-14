@@ -17,11 +17,12 @@ export function analysisData(data: Overview, devices: Device[], start: string, e
   }));
   const dayDevices = new Map(data.breakdown.map(day => [day.day, new Map(day.devices.map(v => [v.key, v.total_tokens]))]));
   const dayModels = new Map(data.breakdown.map(day => [day.day, new Map(day.models.map(v => [v.key, v.total_tokens]))]));
-  // Only uploaded dates are charted: no invented hourly or zero-filled missing data.
+  // Only uploaded dates carry values; the chart may insert null calendar gaps.
   const buckets = data.days.map(day => day.key + 'T00:00:00Z');
   return {
     granularity: 'daily', timezone: 'UTC', range_start: start + 'T00:00:00Z', range_end: end + 'T23:59:59Z',
-    token_usage: data.days.map(day => ({ bucket: day.key + 'T00:00:00Z', ...metrics(day) })),
+    token_usage: data.days.map(day => ({ bucket: day.key + 'T00:00:00Z', ...metrics(day),
+      cost_state: day.complete ? 'complete' : (day.coverage?.priced ?? 0) > 0 ? 'partial' : 'unknown' })),
     model_usage: { buckets, series: data.models.map(model => ({ model: modelLabel(model.key), requests: [], total_tokens: data.days.map(day => dayModels.get(day.key)?.get(model.key) ?? 0) })) },
     device_usage: { buckets, series: data.devices.map(device => ({ model: names[device.key] || device.key, requests: [], total_tokens: data.days.map(day => dayDevices.get(day.key)?.get(device.key) ?? 0) })) },
     api_key_composition: composition(data.devices, key => names[key] || key), model_composition: composition(data.models, modelLabel),

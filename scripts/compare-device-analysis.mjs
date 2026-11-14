@@ -44,10 +44,15 @@ for(const theme of ['light','dark'])for(const target of ['upstream','device']){
   await page.setViewportSize({width,height:1000});await page.waitForTimeout(600);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`${target} overflow ${width}`);await shot(page,`${output}/${target}-${theme}-${width}-analysis.png`);
   if(target==='device'){
    const group=page.getByRole('group',{name:'Token chart metric',exact:true});const buttons=group.getByRole('button');assert.equal(await buttons.count(),6);
+   const summary=group.locator('xpath=ancestor::section[1]').locator('dl').first();
+   assert.match(await summary.innerText(),/Total Tokens — range sum\s+35,000/);
+   assert.match(await summary.innerText(),/Partial cost subtotal — range sum\s+\$0\.4200/);
    for(let index=1;index<6;index++){
     await buttons.nth(index).focus();await page.keyboard.press(index%2?'Enter':'Space');
     assert.equal(await buttons.nth(index).getAttribute('aria-pressed'),'true');assert.equal(await group.locator('[aria-pressed="true"]').count(),1);
     assert.doesNotMatch(await group.innerText(),/Average|Unattributed/);
+    assert.equal(await summary.locator('dd').first().innerText(),['35,000','21,000','7,000','5,250','1,750','35,000'][index]);
+    assert.match(await summary.innerText(),/Partial cost subtotal — range sum\s+\$0\.4200/);
     await shot(page,`${output}/device-${theme}-${width}-metric-${index}.png`);
    }
    await buttons.first().focus();await page.keyboard.press('Enter');assert.equal(await buttons.first().getAttribute('aria-pressed'),'true');assert.match(await group.innerText(),/Average/);
@@ -60,7 +65,7 @@ for(const theme of ['light','dark'])for(const target of ['upstream','device']){
   await page.getByRole('tablist',{name:'Usage Distribution'}).getByRole('tab',{name:'Device',exact:true}).click();await page.getByRole('list').first().getByRole('button',{name:/Example laptop/}).waitFor();
   await page.getByLabel('Breakdown dimension').click();await page.getByRole('option',{name:'Device',exact:true}).click();assert.match(await page.getByRole('region',{name:'Token and cost breakdown',exact:true}).innerText(),/Example laptop/);
   await page.getByLabel('Device',{exact:true}).click();await page.getByRole('option',{name:'Example laptop',exact:true}).click();await page.waitForTimeout(300);assert.equal(requests.filter(u=>u.pathname==='/v1/analysis').at(-1).searchParams.get('device'),'laptop');
-  await page.getByLabel('Agent',{exact:true}).click();await page.getByRole('option',{name:'pi',exact:true}).click();await page.waitForTimeout(300);assert.equal(requests.filter(u=>u.pathname==='/v1/analysis').at(-1).searchParams.get('agent'),'pi');assert.doesNotMatch(await page.getByRole('region',{name:'Token and cost breakdown',exact:true}).innerText(),/claude-example/);assert.match(await page.locator('main').innerText(),/21.00K/);
+  await page.getByLabel('Agent',{exact:true}).click();await page.getByRole('option',{name:'pi',exact:true}).click();await page.waitForTimeout(300);assert.equal(requests.filter(u=>u.pathname==='/v1/analysis').at(-1).searchParams.get('agent'),'pi');assert.doesNotMatch(await page.getByRole('region',{name:'Token and cost breakdown',exact:true}).innerText(),/claude-example/);assert.match(await page.locator('main').innerText(),/21.00K/);assert.match(await page.locator('main').innerText(),/Total Tokens — range sum\s+21,000/);
   await page.locator('[data-time-range-trigger]:visible').click();await page.locator('[data-time-range-mode="all"]').click();await page.waitForTimeout(300);assert.equal(requests.filter(u=>u.pathname==='/v1/analysis').at(-1).searchParams.get('start'),'2026-11-03');
   zero=true;await page.locator('[data-dashboard-refresh]').click();await page.getByText('free-model',{exact:true}).first().waitFor();assert.doesNotMatch(await page.getByRole('region',{name:'Token and cost breakdown',exact:true}).innerText(),/Unknown/);await shot(page,`${output}/device-${theme}-zero.png`);
   empty=true;await page.locator('[data-dashboard-refresh]').click();await page.waitForTimeout(300);assert.equal(await page.getByRole('region',{name:'Token and cost breakdown',exact:true}).getByRole('row').count(),1);await shot(page,`${output}/device-${theme}-empty.png`);

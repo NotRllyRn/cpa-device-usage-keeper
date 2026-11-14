@@ -729,6 +729,8 @@ export interface UsageQuotaRefreshResponse {
 }
 
 export interface AnalysisTokenUsageBucket {
+  // Optional device-report coverage; upstream cost availability stays unchanged.
+  cost_state?: 'complete' | 'partial' | 'unknown'
 	bucket: string
 	input_tokens: number
 	output_tokens: number

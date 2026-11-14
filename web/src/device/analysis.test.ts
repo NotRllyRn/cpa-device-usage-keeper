@@ -14,6 +14,18 @@ describe('device analysis adapter',()=>{
   expect(result.heatmap.cells[0]).toMatchObject({api_key:'d',model:'model',cost_available:false});
   expect(result.model_efficiency).toEqual([]);
  });
+ it.each([
+  ['complete', true, 1, .2],
+  ['partial', false, 1, .2],
+  ['unknown', false, 0, 0],
+  ['complete', true, 1, 0],
+  ['partial', false, 1, 0],
+  ['unknown', false, 0, .2],
+ ] as const)('carries daily %s cost coverage without changing math (%s, %s, %s)',(state,complete,priced,known_cost)=>{
+  const day={...value,key:'2026-01-02',complete,known_cost,coverage:{priced,missing:0,conditional:0,unattributed_tokens:complete?0:7}};
+  const result=analysisData({...data,days:[day]},[],'2026-01-02','2026-01-02');
+  expect(result.token_usage[0]).toMatchObject({cost_state:state,cost_available:complete,cost_usd:known_cost,total_tokens:142});
+ });
  it('retains zero, unattributed and empty results distinctly',()=>{
   const unknown={...value,key:'',total_tokens:7};
   const result=analysisData({...data,models:[unknown]},[],'2026-01-02','2026-01-02');

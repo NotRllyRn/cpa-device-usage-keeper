@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { useTranslation } from 'react-i18next';
 import '@/lib/chartjs';
 import { Interaction, Tooltip } from 'chart.js';
-import type { Chart, ChartData, ChartOptions, InteractionItem, InteractionModeFunction, Plugin, ScriptableContext, TooltipModel, TooltipPositionerFunction } from 'chart.js';
+import type { Chart, ChartData, ChartOptions, InteractionItem, InteractionModeFunction, Plugin, ScriptableContext, ScriptableLineSegmentContext, TooltipModel, TooltipPositionerFunction } from 'chart.js';
 import { Bar, Doughnut, Scatter } from '../charts/UsageChart';
 import type { AnalysisCompositionItem, AnalysisCostSummary, AnalysisHeatmapCell, AnalysisLatencyDiagnostics, AnalysisModelEfficiencyItem, AnalysisModelUsagePayload, AnalysisResponse, AnalysisTokenUsageBucket } from '@/lib/types';
 import { calculateDisplayInputTokens, calculateDisplayOutputTokens, formatCompactNumber, formatDurationMs, formatUsd } from '@/utils/usage';
@@ -44,6 +44,9 @@ export type AnalysisCompositionDimension = 'api_key' | 'model' | 'credentials' |
 const DEFAULT_COMPOSITION_DIMENSIONS: readonly AnalysisCompositionDimension[] = ['api_key', 'model', 'credentials', 'ai_provider'];
 
 type ChartRow = {
+  bucket: string;
+  isGap?: boolean;
+  costState?: AnalysisTokenUsageBucket['cost_state'];
   label: string;
   input: number;
   output: number;
@@ -640,6 +643,8 @@ function buildTopModelsChartOptions({
 function buildTokenUsageRows(buckets: AnalysisTokenUsageBucket[], granularity: AnalysisResponse['granularity'], timezone?: string): ChartRow[] {
   const labels = formatBucketLabels(buckets.map((bucket) => bucket.bucket), granularity, timezone);
   return buckets.map((bucket, index) => ({
+    bucket: bucket.bucket,
+    costState: bucket.cost_state,
     label: labels[index],
     input: calculateDisplayInputTokens({
       inputTokens: bucket.input_tokens,
@@ -660,6 +665,20 @@ function buildTokenUsageRows(buckets: AnalysisTokenUsageBucket[], granularity: A
     cost: toNumber(bucket.cost_usd),
     costAvailable: bucket.cost_available !== false,
   }));
+}
+
+// Null markers are chart-only: never include unreported days in sums or averages.
+function withDailyChartGaps(rows: ChartRow[]): ChartRow[] {
+  const dayMs = 86_400_000;
+  return rows.flatMap((row, index) => {
+    const gaps: ChartRow[] = [];
+    const next = Date.parse(rows[index + 1]?.bucket ?? '');
+    for (let time = Date.parse(row.bucket) + dayMs; time < next; time += dayMs) {
+      const bucket = new Date(time).toISOString();
+      gaps.push({ ...row, bucket, label: formatBucketLabels([bucket], 'daily', 'UTC')[0], isGap: true });
+    }
+    return [row, ...gaps];
+  });
 }
 
 function calculateAverageTotalTokens(rows: ChartRow[]): number {
@@ -900,7 +919,7 @@ function buildCompositionChartOptions(chartTheme: ChartTheme, labels: Compositio
 }
 
 // 总费用读取接口已存汇总；每百万 Token 成本沿用当前图表的 Token 分母，不重新匹配单价。
-function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay }: { costDisplay?: CostDisplay; rows: ChartRow[]; summary: AnalysisCostSummary | undefined; loading: boolean; isDark: boolean; isMobile: boolean }) {
+function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile, costDisplay }: { granularity?: AnalysisResponse['granularity']; costDisplay?: CostDisplay; rows: ChartRow[]; summary: AnalysisCostSummary | undefined; loading: boolean; isDark: boolean; isMobile: boolean }) {
   const { t } = useTranslation();
   const aggregateMode = useAnalysisAggregate();
   const tokenLabels = useMemo(() => ({
@@ -919,36 +938,57 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay
   const [selectedMetric, setSelectedMetric] = useState<'all' | 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'cost'>('all');
   const metric = aggregateMode ? selectedMetric : 'all';
   const hasUnavailableCost = summary?.cost_available === false || rows.some((row) => !row.costAvailable);
+  const chartRows = useMemo(() => aggregateMode && granularity === 'daily' ? withDailyChartGaps(rows) : rows, [aggregateMode, granularity, rows]);
   const chartData = useMemo(() => {
-    const data = buildAnalysisTokenChartData(rows, tokenLabels);
+    const data = buildAnalysisTokenChartData(chartRows, tokenLabels);
     if (!aggregateMode) return data;
     data.datasets = data.datasets.filter(dataset => dataset.yAxisID !== 'requests' && dataset.label !== tokenLabels.reasoning);
-    data.datasets[0] = { ...data.datasets[0], tooltipData: rows.map(row => row.input) } as TokenTooltipDataset;
+    data.datasets[0] = { ...data.datasets[0], tooltipData: chartRows.map(row => row.input) } as TokenTooltipDataset;
     const cost = data.datasets.find(dataset => dataset.yAxisID === 'cost');
-    if (cost) cost.data = rows.map(row => row.costAvailable ? row.cost : null);
-    data.datasets.push({ label: 'Unattributed', data: rows.map(row => Math.max(0, row.total - row.input - row.output - row.cacheRead - row.cacheWrite)), backgroundColor: '#94a3b8', stack: 'tokens', yAxisID: 'tokens' });
+    if (cost) Object.assign(cost, {
+      data: chartRows.map(row => (row.costState ? row.costState !== 'unknown' : row.costAvailable) ? row.cost : null),
+      spanGaps: false,
+      pointStyle: (context: ScriptableContext<'line'>) => chartRows[context.dataIndex]?.costState === 'partial' ? 'triangle' : 'circle',
+      pointRadius: (context: ScriptableContext<'line'>) => chartRows[context.dataIndex]?.costState === 'partial' ? 4 : 2,
+      segment: { borderDash: (context: ScriptableLineSegmentContext) => [context.p0DataIndex, context.p1DataIndex].some(index => chartRows[index]?.costState === 'partial') ? [5, 4] : undefined },
+    });
+    data.datasets.push({ label: 'Unattributed', data: chartRows.map(row => Math.max(0, row.total - row.input - row.output - row.cacheRead - row.cacheWrite)), backgroundColor: '#94a3b8', stack: 'tokens', yAxisID: 'tokens' });
+    data.datasets.forEach(dataset => { dataset.data = dataset.data.map((value, index) => chartRows[index].isGap ? null : value); });
     if (metric !== 'all') data.datasets = data.datasets.filter(dataset => dataset.label === tokenLabels[metric]);
     if (cost && hasUnavailableCost) cost.label = `${tokenLabels.cost} (partial / unknown)`;
     return data;
-  }, [aggregateMode, hasUnavailableCost, metric, rows, tokenLabels]);
+  }, [aggregateMode, hasUnavailableCost, metric, chartRows, tokenLabels]);
   const chartOptions = useMemo(() => {
-    const options = buildAnalysisTokenChartOptions({ chartTheme, isMobile, totalTokens: rows.map(row => row.total), totalLabel: tokenLabels.total, averageTokenTotal });
+    const options = buildAnalysisTokenChartOptions({ chartTheme, isMobile, totalTokens: chartRows.map(row => row.total), totalLabel: tokenLabels.total, averageTokenTotal });
     if (aggregateMode && options.scales) {
       if (options.scales.requests) options.scales.requests.display = false;
       if (options.scales.tokens) options.scales.tokens.display = metric !== 'cost';
       if (options.scales.cost) options.scales.cost.display = metric === 'all' || metric === 'cost';
+      const callbacks = options.plugins?.tooltip?.callbacks;
+      if (callbacks) {
+        const label = callbacks.label;
+        callbacks.label = function (context) {
+          if (context.dataset.yAxisID === 'cost') {
+            const prefix = chartRows[context.dataIndex]?.costState === 'partial' ? 'Known cost subtotal — incomplete' : tokenLabels.cost;
+            return `${prefix}: ${formatUsd(context.parsed.y ?? 0)}`;
+          }
+          return label?.call(this, context) ?? '';
+        };
+      }
       if (metric !== 'all' && options.plugins) {
         delete options.plugins.analysisTokenAverageLine;
         if (options.plugins.tooltip?.callbacks) delete options.plugins.tooltip.callbacks.footer;
       }
     }
     return options;
-  }, [aggregateMode, metric, averageTokenTotal, chartTheme, isMobile, rows, tokenLabels.total]);
+  }, [aggregateMode, metric, averageTokenTotal, chartTheme, isMobile, chartRows, tokenLabels.total, tokenLabels.cost]);
   const legendItems = useMemo(() => {
     const items = buildTokenLegendItems(tokenLabels, averageTokenTotal, chartTheme.averageLine);
     return aggregateMode ? [...items.filter(item => item.label !== tokenLabels.requests && item.label !== tokenLabels.reasoning), { label: 'Unattributed', color: '#94a3b8' }] : items;
   }, [aggregateMode, averageTokenTotal, chartTheme.averageLine, tokenLabels]);
   const totalTokens = rows.reduce((sum, row) => sum + row.total, 0);
+  const selectedTokenMetric = metric === 'all' || metric === 'cost' ? 'total' : metric;
+  const selectedTokenSum = rows.reduce((sum, row) => sum + row[selectedTokenMetric], 0);
   const totalCost = toNumber(summary?.total_cost_usd);
   return (
     <section className={`${styles.analysisCard} keeper-card-surface`}>
@@ -960,11 +1000,11 @@ function TokenUsageChart({ rows, summary, loading, isDark, isMobile, costDisplay
       {!loading && (rows.length > 0 || totalCost > 0) && (
         <dl className={styles.analysisSummary}>
           <div>
-            <dt>{t('usage_stats.total_tokens')}</dt>
-            <dd>{formatCompactNumber(totalTokens)}</dd>
+            <dt>{aggregateMode ? `${tokenLabels[selectedTokenMetric]} — range sum` : t('usage_stats.total_tokens')}</dt>
+            <dd>{aggregateMode ? selectedTokenSum.toLocaleString('en-US') : formatCompactNumber(totalTokens)}</dd>
           </div>
           <div>
-            <dt>{costDisplay?.label ?? t('usage_stats.total_cost')}</dt>
+            <dt>{costDisplay?.label ?? t('usage_stats.total_cost')}{aggregateMode ? ' — range sum' : ''}</dt>
             <dd>{costDisplay?.value ?? (aggregateMode && hasUnavailableCost ? `Unknown (known ${formatUsd(totalCost)})` : formatUsd(totalCost))}</dd>
           </div>
           <div>
@@ -1749,7 +1789,7 @@ export function AnalysisPanel({
     <AnalysisAggregateContext.Provider value={aggregateMode}>
     <ChartLifecycleProvider queryKey={modelSpeedQueryKey} source={analysis} refreshSignal={chartRefreshSignal}>
     <div className={styles.analysisPanel}>
-      <TokenUsageChart costDisplay={costDisplay} rows={tokenRows} summary={analysis?.cost_summary} loading={loading} isDark={isDark} isMobile={isMobile} />
+      <TokenUsageChart granularity={analysis?.granularity} costDisplay={costDisplay} rows={tokenRows} summary={analysis?.cost_summary} loading={loading} isDark={isDark} isMobile={isMobile} />
       <div className={styles.insightGrid}>
         <CompositionPanel tabs={compositionTabs} loading={loading} isDark={isDark} windowMinutes={analysisWindowMinutes} />
         <TopModelsCard
