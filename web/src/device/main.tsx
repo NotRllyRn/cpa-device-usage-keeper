@@ -56,11 +56,15 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const [manualModel, setManualModel] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
   const [filters, setFilters] = useState(() => ({ ...emptyFilters, ...rangeDates('7d') }));
-  const [loadedDates, setLoadedDates] = useState(() => rangeDates('7d'));
-  const [overview, setOverview] = useState<Overview | null>(null);
+  const scope = JSON.stringify([tab, filters, range, customRange, allTime]);
+  const [loaded, setLoaded] = useState<{ scope: string; data: Overview; dashboard: ReturnType<typeof dashboardData>; analysis: ReturnType<typeof analysisData> | null } | null>(null);
+  const [loadError, setLoadError] = useState<{ scope: string; message: string } | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [prices, setPrices] = useState<ModelPricingConfig[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [pending, setBusy] = useState(false);
+  const busy = pending || (loaded?.scope !== scope && loadError?.scope !== scope);
+  const current = !busy && loaded?.scope === scope ? loaded : null;
+  const overview = current?.data ?? null;
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [enrollment, setEnrollment] = useState('');
@@ -68,7 +72,7 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
   const request = useRef(0);
   const mutation = useRef(false);
   const refresh = useCallback(async () => {
-    const id = ++request.current; setBusy(true); setError('');
+    const id = ++request.current; setBusy(true); setError(''); setLoadError(null);
     try {
       const boundary = allTime ? await api.boundary(filters) : null;
       if (id !== request.current) return false;
@@ -79,12 +83,16 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       const [data, list, configs] = await Promise.all([api.overview({ ...filters, ...dates }, tab === 'analysis'), api.devices(), api.prices()]);
       if (id !== request.current) return false;
       validateDashboardRange(dates.start, dates.end, data.models.length + data.devices.length);
-      setOverview(data); setLoadedDates(dates); setDevices(list); setPrices(configs);
+      // Adapt only the completed response for this endpoint/query, inside the
+      // request error handler. Never adapt previous Overview data during navigation.
+      const dashboard = dashboardData(data, list, dates.start, dates.end);
+      const analysis = tab === 'analysis' ? analysisData(data, list, dates.start, dates.end) : null;
+      setLoaded({ scope, data, dashboard, analysis }); setDevices(list); setPrices(configs);
       setModelOptions(old => [...new Set([...old, ...data.models.map(m => m.key).filter(Boolean), ...configs.map(p => p.model)])].sort());
       return true;
-    } catch (e) { if (id === request.current) { setError(message(e)); setOverview(null); } return false; }
+    } catch (e) { if (id === request.current) { setLoadError({ scope, message: message(e) }); setLoaded(null); } return false; }
     finally { if (id === request.current) setBusy(false); }
-  }, [api, filters, range, customRange, allTime, tab]);
+  }, [api, filters, range, customRange, allTime, tab, scope]);
   useEffect(() => {
     void refresh();
     // This is a monotonic request generation, not a DOM ref. Invalidate every
@@ -117,17 +125,18 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
     saveModel: async config => ({ result: { model: config.model, config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models', 'PUT', config)) }),
     deleteModel: async model => ({ result: { config_revision: 0 }, refreshed: await mutate(() => api.request('/pricing/models?model=' + encodeURIComponent(model), 'DELETE')) }),
   };
-  const analysis = tab === 'analysis' && !busy && overview ? analysisData(overview, devices, loadedDates.start, loadedDates.end) : null;
-  const dashboard = overview ? dashboardData(overview, devices, loadedDates.start, loadedDates.end) : null;
+  const analysis = current?.analysis ?? null;
+  const dashboard = current?.dashboard ?? null;
   const filter = (key: keyof Filters, value: string) => setFilters(old => ({ ...old, [key]: value }));
   return <div className={`${styles.pageShell} ${styles.standalone}`} data-keeper-page="usage"><div className={styles.pageFrame}>
     <DashboardHeader identity="Device Usage Keeper" onLogout={onLogout} />
     <main className={styles.contentColumn}><div className={styles.container}>
       <p className="device-note">Independent Keeper fork · UTC daily aggregates · API-equivalent estimates, not subscription bills. <a href="https://github.com/Willxup/cpa-usage-keeper">Upstream</a></p>
+      {loadError?.scope === scope && <p role="alert" className="device-error">{loadError.message}</p>}
       {error && <p role="alert" className="device-error">{error}</p>}
       <DashboardToolbar items={tabs} activeId={tab} onNavigate={setTab} onRefresh={() => void refresh()} refreshing={busy} filters={[
         <Select key="device" value={filters.device} options={[{ value: '', label: 'All devices' }, ...devices.map(d => ({ value: d.id, label: d.name + (d.revoked ? ' (revoked)' : '') }))]} onChange={v => filter('device', v)} ariaLabel="Device" />,
-        <Select key="agent" value={filters.agent} options={[{ value: '', label: 'All agents' }, ...[...new Set([...(overview?.agents ?? []), filters.agent].filter(Boolean))].map(a => ({ value: a, label: a }))]} onChange={v => filter('agent', v)} ariaLabel="Agent" />,
+        <Select key="agent" value={filters.agent} options={[{ value: '', label: 'All agents' }, ...[...new Set([...(loaded?.data.agents ?? []), filters.agent].filter(Boolean))].map(a => ({ value: a, label: a }))]} onChange={v => filter('agent', v)} ariaLabel="Agent" />,
         <TimeRangeControl key="range" dailyOnly value={allTime ? 'custom' : range} customRange={allTime ? allTimeRange : customRange} maxCustomDayRangeDays={MAX_DEVICE_RANGE_DAYS} showCustomRangeYear allTime={{ active: allTime, onSelect: () => { setAllTimeRange(undefined); setAllTime(true); if (allTime) void refresh(); } }} timeZone="UTC" ariaLabel="Time range" onChange={(value, custom) => { setAllTime(false); setRange(value); setCustomRange(custom); setFilters(old => ({ ...old, ...rangeDates(value, custom) })); }} />,
       ]} />
       {allTime && emptyHistory && <p role="status" className="device-note">No usage history for these filters. All time shows today (UTC) until uploads arrive.</p>}

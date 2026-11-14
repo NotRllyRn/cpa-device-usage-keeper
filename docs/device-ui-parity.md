@@ -106,5 +106,11 @@ device/agent/date/all-time filters, zero/empty states, partial/unknown/complete
 cost presentation and mobile overflow. Upstream-only unsupported sections remain
 visible in upstream screenshots and are intentionally absent in device views.
 
+Use `DEVICE_ANALYSIS_SCOPE=1` for the navigation regression: Overview with 101
+models or devices → Analysis, server/adapter limit errors, narrowing filters to
+recover, and delayed responses during tab/filter changes. Loaded views are tied
+to their endpoint/query scope; adapters run inside the request error handler,
+not during rendering.
+
 These tests do not establish deployed CPA plugin compatibility or replace native
 host lifecycle checks before deployment. No production deployment is performed.
