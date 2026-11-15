@@ -76,6 +76,14 @@ describe('DailyAverageCard', () => {
     expect(html).toContain('Set pricing to calculate cost');
   });
 
+  it('preserves tiny positive aggregate averages but keeps default and genuine zero formatting', () => {
+    const usage = { ...usageWithDailyAverages, summary: { ...usageWithDailyAverages.summary, daily_average_cost: 0.0001 / 275, cost_available: true } };
+    expect(renderToStaticMarkup(<DailyAverageCard usage={usage} loading={false} aggregateMode />)).toContain('$0.000000364');
+    expect(renderToStaticMarkup(<DailyAverageCard usage={usage} loading={false} />)).toContain('$0.0000');
+    usage.summary.daily_average_cost = 0;
+    expect(renderToStaticMarkup(<DailyAverageCard usage={usage} loading={false} aggregateMode />)).toContain('$0.0000');
+  });
+
   it('renders a loading shell before an eligible range returns its averages', () => {
     const html = renderToStaticMarkup(<DailyAverageCard usage={null} loading />);
 

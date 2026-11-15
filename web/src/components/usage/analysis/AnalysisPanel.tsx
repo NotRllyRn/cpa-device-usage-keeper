@@ -963,7 +963,10 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
     const options = buildAnalysisTokenChartOptions({ chartTheme, isMobile, totalTokens: chartRows.map(row => row.total), totalLabel: tokenLabels.total, averageTokenTotal });
     if (aggregateMode && options.scales) {
       if (options.scales.requests) options.scales.requests.display = false;
-      if (options.scales.tokens) options.scales.tokens.display = metric !== 'cost';
+      if (options.scales.tokens) {
+        options.scales.tokens.display = metric !== 'cost';
+        options.scales.tokens.ticks = { ...options.scales.tokens.ticks, precision: 0 };
+      }
       if (options.scales.cost) {
         options.scales.cost.display = hasPlottedCost && (metric === 'all' || metric === 'cost');
         options.scales.cost.ticks = { ...options.scales.cost.ticks, callback: (value) => formatUsd(Number(value), true) };
@@ -1009,7 +1012,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
           </div>
           <div>
             <dt>{costDisplay?.label ?? t('usage_stats.total_cost')}{aggregateMode ? ' — range sum' : ''}</dt>
-            <dd>{costDisplay?.value ?? (aggregateMode && hasUnavailableCost ? `Unknown (known ${formatUsd(totalCost)})` : formatUsd(totalCost))}</dd>
+            <dd>{costDisplay?.value ?? (aggregateMode && hasUnavailableCost ? `Unknown (known ${formatUsd(totalCost, true)})` : formatUsd(totalCost, aggregateMode))}</dd>
           </div>
           <div>
             <dt>{t('usage_stats.analysis_cost_per_million_tokens')}</dt>

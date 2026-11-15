@@ -144,9 +144,21 @@ describe('AnalysisPanel token chart data', () => {
     expect(renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} />)).not.toContain('N/A — no tokens');
   });
 
+  it.each([0, 1, 2])('uses integer token ticks for aggregate total %s without changing upstream defaults', (total) => {
+    const analysis = { ...emptyAnalysis, token_usage: [tokenBucket({ total_tokens: total, input_tokens: total, output_tokens: 0 })] };
+    renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} aggregateMode />);
+    expect(chartCapture.barOptions?.scales?.tokens?.ticks).toMatchObject({ precision: 0 });
+    const callback = chartCapture.barOptions?.scales?.tokens?.ticks?.callback;
+    expect([0, 1, 2].map((value, index) => callback!.call({} as never, value, index, []))).toEqual(['0', '1', '2']);
+    chartCapture.barData = null; chartCapture.barOptions = null;
+    renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} />);
+    expect(chartCapture.barOptions?.scales?.tokens?.ticks).not.toHaveProperty('precision');
+  });
+
   it('preserves tiny positive aggregate rates and distinct currency ticks without changing upstream defaults', () => {
     const analysis = { ...emptyAnalysis, token_usage: [tokenBucket({ total_tokens: 1_000_000_000, cost_usd: 0.00003 })], cost_summary: { total_cost_usd: 0.00003, cost_available: true } };
     const html = renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} aggregateMode />);
+    expect(html).toContain('usage_stats.total_cost — range sum</dt><dd>$0.00003');
     expect(html).toContain('usage_stats.analysis_cost_per_million_tokens</dt><dd title="usage_stats.analysis_blended_rate">$0.00000003');
     const callback = chartCapture.barOptions?.scales?.cost?.ticks?.callback;
     expect(callback).toBeTypeOf('function');

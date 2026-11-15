@@ -60,7 +60,10 @@
 .device-table table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
 .device-table th, .device-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
 .device-date { font-size: 12px; display: flex; align-items: center; gap: 6px; }
-.device-date input, .device-login input, [data-keeper-page] form input { color: inherit; background: transparent; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
+.device-model-choice { display: grid; gap: 8px; width: 100%; max-width: 720px; }
+.device-model-choice-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.device-model-choice-row .form-group { flex: 1 1 260px; min-width: 0; margin: 0; }
+.device-date input, .device-login input, [data-keeper-page] form:not(.device-model-choice) input { color: inherit; background: transparent; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
 .device-login { max-width: 480px; margin: 15vh auto; padding: 20px; }
 .device-login form { display: grid; gap: 16px; margin: 20px 0; }
 .device-login label { display: grid; gap: 8px; }

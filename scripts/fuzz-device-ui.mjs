@@ -183,6 +183,25 @@ async function invariant(page, state) {
     const tokenCard = page.locator('[data-device-stat="tokens"][data-token-total]');
     if (await tokenCard.count()) assert.equal(await tokenCard.getAttribute('data-token-total'), String(fixture(url, state.mode).total.total_tokens), 'No stale data');
   }
+  const choiceForm = page.locator('.device-model-choice');
+  if (await choiceForm.count()) {
+    const input = choiceForm.getByRole('textbox', { name: 'Additional model identifier' });
+    const button = choiceForm.getByRole('button', { name: 'Add to model choices' });
+    assert.equal(await button.isDisabled(), !(await input.inputValue()).trim(), 'Choice action explains its disabled empty state');
+    assert.ok(await input.evaluate(el => el.classList.contains('input')), 'Model choice reuses the Keeper input');
+    assert.ok((await choiceForm.boundingBox()).width <= 721, 'Model choice input and action stay in a bounded group');
+    assert.equal(await button.getAttribute('aria-describedby'), 'device-model-choice-help');
+    count('settings:model-choice-group-accessible');
+  }
+  if (state.mode === 'small' && request !== '/') {
+    const expected = fixture(new URL('http://local' + request), state.mode);
+    if (expected.total.known_cost > 0) {
+      for (const amount of [page.locator('[data-device-average] strong').last(), page.locator('[data-device-stat="cost"] [class*="statValue"]').first()]) {
+        if (await amount.count()) assert.ok(Number((await amount.innerText()).replace(/[^\d.]/g, '')) > 0, 'Positive costs and calendar-day averages never become displayed zero');
+      }
+      count('currency:positive-cost-and-calendar-average');
+    }
+  }
   count('invariant:passed');
 }
 async function screenshot(page, name, meta) {
@@ -253,7 +272,7 @@ try {
       }
       await context.close();
     }
-    if (phase !== 'baseline') for (const theme of ['light', 'dark']) for (const width of [768, 1440]) {
+    if (phase !== 'baseline') for (const theme of ['light', 'dark']) for (const width of [320, 768, 1440]) {
       const { page, state, context } = await makePage(width, theme); pageStates.set(page, state);
       await chooseRange(page, 'all');
       for (const tab of ['Overview', 'Analysis', 'Daily history', 'Devices', 'Settings']) {
@@ -342,7 +361,7 @@ try {
     const sequence = []; const entry = { seed, planned: actions, completed: 0, sequence, failures: [] }; report.seeds.push(entry);
     // Each seed has a guaranteed prefix. Randomness explores transitions, not
     // whether the key states happen to be covered at all.
-    const prefix = [ ...['Overview', 'Analysis', 'Daily history', 'Devices', 'Settings'].map(value => ({ kind: 'tab', value })), ...['all', 'custom', 'today', 'yesterday', 'days'].map(value => ({ kind: 'range', value })), { kind: 'range-cancel' }, ...[['Device', 3], ['Agent', 3], ['Model family', 5]].flatMap(([value, length]) => Array.from({ length }, (_, index) => ({ kind: 'filter', value, index }))), ...['loading', 'error', 'empty', 'partial', 'complete', 'unknown', 'zero', 'small', 'race'].map(value => ({ kind: 'data', value })), { kind: 'keyboard' }, { kind: 'pricing-dialog' }, { kind: 'pricing-validation' }, ...widths.map(value => ({ kind: 'resize', value })), { kind: 'theme', value: 'dark' }, { kind: 'theme', value: 'light' } ];
+    const prefix = [ ...['Overview', 'Analysis', 'Daily history', 'Devices', 'Settings'].map(value => ({ kind: 'tab', value })), ...['all', 'custom', 'today', 'yesterday', 'days'].map(value => ({ kind: 'range', value })), { kind: 'range-cancel' }, ...[['Device', 3], ['Agent', 3], ['Model family', 5]].flatMap(([value, length]) => Array.from({ length }, (_, index) => ({ kind: 'filter', value, index }))), ...['loading', 'error', 'empty', 'partial', 'complete', 'unknown', 'zero', 'small', 'race'].map(value => ({ kind: 'data', value })), { kind: 'keyboard' }, { kind: 'pricing-dialog' }, { kind: 'pricing-validation' }, { kind: 'model-choice' }, ...widths.map(value => ({ kind: 'resize', value })), { kind: 'theme', value: 'dark' }, { kind: 'theme', value: 'light' } ];
     for (let index = 0; index < actions; index++) {
       const action = prefix[index] || pick([{ kind: 'tab', value: pick(['Overview', 'Analysis', 'Daily history', 'Devices', 'Settings']) }, { kind: 'range', value: pick(['all', 'custom', 'today', 'yesterday', 'days']) }, { kind: 'filter', value: pick(['Device', 'Agent', 'Model family']), index: Math.floor(rng() * 3) }, { kind: 'resize', value: pick(widths) }, { kind: 'theme', value: pick(['light', 'dark']) }, { kind: 'collapse' }, { kind: 'keyboard' }, { kind: 'data', value: pick(['loading', 'error', 'empty', 'partial', 'complete', 'unknown', 'zero', 'small', 'race']) }, { kind: 'pricing-dialog' }]);
       sequence.push(action);
@@ -367,6 +386,22 @@ try {
           await trigger.focus(); await page.keyboard.press('ArrowDown'); await invariantPanels(page); await page.keyboard.press('Escape');
           assert.ok(await trigger.evaluate(el => el === document.activeElement), 'Escape restores filter focus');
           await page.keyboard.press('Tab'); count('keyboard:filter-escape-tab');
+        }
+        if (action.kind === 'model-choice') {
+          await navigate(page, 'Settings');
+          const form = page.locator('.device-model-choice');
+          const input = form.getByRole('textbox', { name: 'Additional model identifier' });
+          const button = form.getByRole('button', { name: 'Add to model choices' });
+          const summary = page.getByText(/^\d+ model choices ·/);
+          const before = Number((await summary.innerText()).match(/^\d+/)[0]);
+          await input.fill('  '); assert.ok(await button.isDisabled(), 'Whitespace is not a model choice');
+          const model = `local-synthetic-model-${seed}`;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            await input.fill(model); assert.ok(await button.isEnabled()); await input.press('Enter');
+            assert.equal(await input.inputValue(), '', 'Enter submits and clears the local choice');
+            assert.equal(Number((await summary.innerText()).match(/^\d+/)[0]), before + 1, 'Duplicate choices are not added');
+          }
+          count('settings:model-choice-keyboard-add-and-deduplicate');
         }
         if (action.kind === 'pricing-validation') await pricingValidation(page, state);
         if (action.kind === 'pricing-dialog') {

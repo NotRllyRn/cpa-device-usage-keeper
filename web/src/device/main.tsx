@@ -7,6 +7,7 @@ import { useThemeStore } from '@/stores';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardToolbar } from '@/components/dashboard/DashboardToolbar';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { CompletePricingSyncModal } from '@/components/usage/pricing/CompletePricingSyncModal';
 import { PricingSettings } from '@/components/usage/pricing/PricingSettings';
@@ -169,7 +170,19 @@ function Dashboard({ api, onLogout }: { api: DeviceAPI; onLogout: () => void }) 
       {tab === 'devices' && <section className={styles.statCard}><h2>Devices</h2><form onSubmit={e => { e.preventDefault(); void mutate(async () => { const result = await api.request<{ token: string }>('/devices', 'POST', { name }); setEnrollment(result.token); setName(''); }).catch(e => setError(message(e))); }}><label>Device name <input required pattern="[a-zA-Z0-9][a-zA-Z0-9._:+\-]{0,159}" value={name} onChange={e => setName(e.target.value)} /></label><Button type="submit" disabled={busy}>Enroll</Button></form>
         {enrollment && <div role="status"><p>Upload token (shown only here; enter privately into the installer):</p><output className="device-token">{enrollment}</output><Button onClick={() => setEnrollment('')}>Dismiss token</Button></div>}
         <p id="device-list-scroll" className="device-note">Scroll horizontally for upload status and actions. Focus the table region, then use ← / →.</p><div className="device-table" role="region" aria-label="Devices, horizontally scrollable" aria-describedby="device-list-scroll" tabIndex={0}><table><thead><tr><th>Device</th><th>Last upload received</th><th>Status</th><th>Action</th></tr></thead><tbody>{devices.map(d => <tr key={d.id}><td>{d.name}</td><td>{d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never'}</td><td>{d.revoked ? 'Revoked' : 'Active'}</td><td><Button disabled={d.revoked || busy} variant="danger" onClick={() => { if (confirm('Revoke uploads for ' + d.name + '? History is retained.')) void mutate(() => api.request('/devices/' + d.id, 'DELETE')).catch(e => setError(message(e))); }}>Revoke</Button></td></tr>)}</tbody></table></div><p className="device-note">Copied histories across devices overlap. Filter old/replacement devices rather than summing both. Enrollment is capped at 1,000, including revoked devices.</p></section>}
-      {tab === 'settings' && <><p className="device-note">Keeper Model Pricing Settings. Use Add for uploaded models, or Sync Prices to select and review source rates. Saving immediately refreshes historical estimates and the model breakdown. Recalculate Costs is unnecessary: aggregate costs are recalculated on every read. Request-dependent rules produce unknown daily costs.</p><label>Additional model identifier <input value={manualModel} onChange={e => setManualModel(e.target.value)} /></label><Button disabled={!manualModel.trim()} onClick={() => { setModelOptions(old => [...new Set([...old, manualModel.trim()])].sort()); setManualModel(''); }}>Add to model choices</Button><p>{modelOptions.length} model choices · {prices.length} configured. Add is unavailable only while loading or when all choices already have settings; use Edit for those models.</p><PricingSettings pricing={pricing} aggregateMode onSyncPrices={() => setSyncPrices(true)} timezone="UTC" /></>}
+      {tab === 'settings' && <><p className="device-note">Keeper Model Pricing Settings. Use Add for uploaded models, or Sync Prices to select and review source rates. Saving immediately refreshes historical estimates and the model breakdown. Recalculate Costs is unnecessary: aggregate costs are recalculated on every read. Request-dependent rules produce unknown daily costs.</p><form className="device-model-choice" onSubmit={e => {
+          e.preventDefault();
+          const choice = manualModel.trim();
+          if (!choice) return;
+          setModelOptions(old => [...new Set([...old, choice])].sort()); setManualModel('');
+        }}>
+          <label htmlFor="device-model-choice">Additional model identifier</label>
+          <div className="device-model-choice-row">
+            <Input id="device-model-choice" aria-describedby="device-model-choice-help" value={manualModel} onChange={e => setManualModel(e.target.value)} />
+            <Button type="submit" disabled={!manualModel.trim()} aria-describedby="device-model-choice-help">Add to model choices</Button>
+          </div>
+          <p id="device-model-choice-help" className="device-note">Enter an identifier to enable Add to model choices. This adds a choice, not a saved price.</p>
+        </form><p>{modelOptions.length} model choices · {prices.length} configured. Add is unavailable only while loading or when all choices already have settings; use Edit for those models.</p><PricingSettings pricing={pricing} aggregateMode onSyncPrices={() => setSyncPrices(true)} timezone="UTC" /></>}
       <CompletePricingSyncModal open={syncPrices} models={prices} onClose={() => setSyncPrices(false)} onRefreshPricing={refresh} onNotice={setError} transport={{ fetch: source => api.request('/pricing/sync?source=' + source), apply: input => api.request('/pricing/sync/apply', 'POST', input), models: async () => ({ models: await api.prices(), config_revision: 0 }) }} />
       <p className="device-note">Unavailable for device aggregates: realtime traffic, request events, credentials, quotas, success rates, request speed and latency.</p>
     </div></main>

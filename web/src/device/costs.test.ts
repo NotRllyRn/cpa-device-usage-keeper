@@ -6,9 +6,9 @@ describe('cost coverage presentation',()=>{
  it('does not present an unavailable subtotal as a priced zero',()=>{
  const unknown={...base.total,known_cost:0,complete:false,coverage:{priced:0,missing:1,conditional:0,unattributed_tokens:0}};
  expect(deviceCostText(unknown)).toBe('Unknown · no priced usage');
- expect(deviceCostText({...unknown,coverage:{...unknown.coverage,priced:1}})).toBe('Partial $0.000000');
+ expect(deviceCostText({...unknown,coverage:{...unknown.coverage,priced:1}})).toBe('Partial $0.0000');
  expect(deviceCostText({...unknown,known_cost:.000001})).toBe('Partial $0.000001');
- expect(deviceCostText({...unknown,complete:true})).toBe('$0.000000');
+ expect(deviceCostText({...unknown,complete:true})).toBe('$0.0000');
  });
  it('shows complete cost and average',()=>{expect(deviceCostDisplay(base)).toMatchObject({label:'Estimated cost',value:'$12.00'});expect(deviceCostDisplay(base,2).value).toBe('$6.00');});
  it('shows partial subtotal and calendar-day average with real missing reasons',()=>{
@@ -20,6 +20,15 @@ describe('cost coverage presentation',()=>{
  expect(deviceCostDisplay(data).details).toContain('require request details');
  expect(deviceCostDisplay(data).details).toContain('7 tokens lack a model');
  expect(deviceCostDisplay(data,2).hint).toBe('Per calendar day, including no-upload days.');
+ });
+ it('keeps positive cost divided across 275 days distinct from zero on every device adapter surface',()=>{
+ const data={...base,total:{...base.total,known_cost:.0001}};
+ expect(deviceCostDisplay(data).value).toBe('$0.0001');
+ expect(deviceCostDisplay(data,275).value).toBe('$0.000000364');
+ expect(deviceCostText({...data.total,known_cost:.0001/275})).toBe('$0.000000364');
+ expect(deviceCostText({...data.total,known_cost:.0001/275,complete:false})).toBe('Partial $0.000000364');
+ expect(deviceCostText({...data.total,known_cost:0})).toBe('$0.0000');
+ expect(deviceCostDisplay({...data,total:{...data.total,known_cost:0}},275).value).toBe('$0.0000');
  });
  it('keeps all-unknown distinct from explicitly free and empty',()=>{
  const free={...base,total:{...base.total,known_cost:0}};

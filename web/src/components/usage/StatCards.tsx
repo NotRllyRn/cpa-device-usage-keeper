@@ -256,7 +256,7 @@ export function StatCards({
       accent: '#f59e0b',
       accentSoft: 'rgba(245, 158, 11, 0.18)',
       accentBorder: 'rgba(245, 158, 11, 0.32)',
-      value: loading ? '-' : costDisplay?.value ?? (aggregateMode && !costAvailable ? `Known ${formatUsd(totalCost)}` : formatUsd(totalCost)),
+      value: loading ? '-' : costDisplay?.value ?? (aggregateMode && !costAvailable ? `Known ${formatUsd(totalCost, true)}` : formatUsd(totalCost, aggregateMode)),
       meta: (
         <>
           <span className={styles.statMetaItem}>

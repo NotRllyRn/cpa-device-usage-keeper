@@ -3,9 +3,10 @@ import type { CostDisplay } from '@/components/usage/DailyAverageCard';
 import type { Aggregate, Overview } from './api';
 
 export function deviceCostText(row: Aggregate): string {
-  if (row.complete) return '$' + row.known_cost.toFixed(6);
+  const cost = formatUsd(row.known_cost, true);
+  if (row.complete) return cost;
   return row.known_cost > 0 || (row.coverage?.priced ?? 0) > 0
-    ? `Partial $${row.known_cost.toFixed(6)}` : 'Unknown · no priced usage';
+    ? `Partial ${cost}` : 'Unknown · no priced usage';
 }
 
 export function deviceCostDisplay(data: Overview, calendarDays?: number): CostDisplay {
@@ -26,6 +27,6 @@ export function deviceCostDisplay(data: Overview, calendarDays?: number): CostDi
   const averageHint = 'Per calendar day, including no-upload days.';
   if (!total.complete && !priced) return { label, value: 'Unknown', hint: average ? averageHint : summary, details: average ? undefined : hint };
   return { label: total.complete ? label : average ? 'Partial cost / day' : 'Partial cost subtotal',
-    value: formatUsd(total.known_cost / (average ? Math.max(1, calendarDays) : 1)),
+    value: formatUsd(total.known_cost / (average ? Math.max(1, calendarDays) : 1), true),
     hint: average ? averageHint : summary, details: average || total.complete ? undefined : hint };
 }

@@ -66,8 +66,11 @@ unattributed token counts. Overview and Analysis display a normal-sized amount
 under **Estimated cost** or **Partial cost subtotal**, with missing reasons.
 Overview's daily average divides that same subtotal by selected calendar days,
 explicitly labeling partial coverage. All-unknown costs remain unknown; explicit
-free rates remain zero; no uploads remain empty. Incomplete daily costs are gaps
-in the cost line, not zero-cost points. Shared upstream defaults are unchanged.
+free rates remain zero; no uploads remain empty. Device summaries, calendar-day
+averages, rankings, tables and chart details share opt-in currency precision so
+positive estimates below $0.0001 do not become displayed zero. Token axes use
+integer ticks, including zero and small-count states. Incomplete daily costs are
+gaps in the cost line, not zero-cost points. Shared upstream defaults are unchanged.
 
 The query rejects more than 100,000 snapshots or 256 MiB of snapshot payloads,
 with an eight-second deadline and existing 100,000 breakdown-cell limit.

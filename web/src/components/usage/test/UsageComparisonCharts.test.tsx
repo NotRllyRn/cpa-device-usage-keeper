@@ -110,6 +110,17 @@ it('preserves detailed metrics on focus and updates summaries on polling',async(
   expect(document.querySelector('[role="tooltip"]:not([hidden])')).toBeNull();
   expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
 });
+it('preserves tiny positive costs in aggregate detail tooltips but keeps default and genuine zero formatting',async()=>{
+  const data=comparisons([item('tiny',{cost:0.000000364}),item('free',{cost:0})]);
+  await act(async()=>root.render(<UsageComparisonCharts comparisons={data} loading={false} aggregateMode />));
+  await act(async()=>container.querySelector<HTMLButtonElement>('[data-comparison-entry="tiny"]')!.focus());
+  expect(document.querySelector('[role="tooltip"]:not([hidden])')?.textContent).toContain('Cost: $0.000000364');
+  await act(async()=>container.querySelector<HTMLButtonElement>('[data-comparison-entry="free"]')!.focus());
+  expect(document.querySelector('[role="tooltip"]:not([hidden])')?.textContent).toContain('Cost: $0.0000');
+  await render(data);
+  await act(async()=>container.querySelector<HTMLButtonElement>('[data-comparison-entry="tiny"]')!.focus());
+  expect(document.querySelector('[role="tooltip"]:not([hidden])')?.textContent).toContain('Cost: $0.0000');
+});
 it('keeps same-label identities separate when polling changes their ranking',async()=>{
   await render(comparisons([item('a',{label:'Same',total_tokens:200}),item('b',{label:'Same'})]));
   await click('[data-series-key="a"]');

@@ -90,7 +90,7 @@ export function DailyAverageCard({ usage, loading, aggregateMode = false, costDi
     {
       key: 'cost',
       label: costDisplay?.label ?? t('usage_stats.avg_cost'),
-      value: loading || !metrics ? '-' : costDisplay?.value ?? (aggregateMode && !metrics.costAvailable ? 'Unknown' : formatUsd(metrics.cost)),
+      value: loading || !metrics ? '-' : costDisplay?.value ?? (aggregateMode && !metrics.costAvailable ? 'Unknown' : formatUsd(metrics.cost, aggregateMode)),
       icon: <IconDollarSign size={14} />,
       accent: '#f59e0b',
       hint: loading ? undefined : costDisplay ? costDisplay.hint : metrics && !metrics.costAvailable ? t('usage_stats.cost_need_price') : undefined,
