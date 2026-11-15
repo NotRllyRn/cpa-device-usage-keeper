@@ -27,6 +27,8 @@ identifier wins; otherwise only the known `[pi] ` prefix is removed and the rema
 identifier is matched exactly. Thus `[pi] gpt-example` inherits `gpt-example` rates,
 including later edits, without copying settings. No fuzzy family/version matching
 is performed, and unmatched models remain unknown. Agent filtering stays separate.
+The [model family filter](device-model-families.md) classifies recognized names
+independently of pricing; it does not identify the serving provider.
 
 The overview shows model input/output/cache tokens and calculated cost; daily
 history gives the day breakdown. Incomplete totals are labeled. An incomplete

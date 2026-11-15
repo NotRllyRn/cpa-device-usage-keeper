@@ -20,7 +20,7 @@ func TestUsageBoundary(t *testing.T) {
 	idB, b, _ := s.store.Enroll("second")
 	check := func(device, agent, want string) {
 		t.Helper()
-		got, err := s.store.EarliestUsageDay(context.Background(), device, agent)
+		got, err := s.store.EarliestUsageDay(context.Background(), device, agent, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func TestUsageBoundary(t *testing.T) {
 	check(idB, "pi", "2020-01-01")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := s.store.EarliestUsageDay(ctx, "", ""); err == nil {
+	if _, err := s.store.EarliestUsageDay(ctx, "", "", ""); err == nil {
 		t.Fatal("ignored cancellation")
 	}
 	for _, tc := range []struct {

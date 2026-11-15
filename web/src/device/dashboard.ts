@@ -39,7 +39,7 @@ export function dashboardData(data: Overview, devices: Device[], start: string, 
   }]));
   const days = new Map(data.days.map(day => [day.key, day]));
   const items = (values: Aggregate[], dimension: 'models' | 'devices'): UsageComparisonItem[] => values.map(value => ({
-    key: value.key, label: dimension === 'devices' ? devices.find(device => device.id === value.key)?.name ?? value.key : value.key,
+    key: value.key, label: dimension === 'devices' ? devices.find(device => device.id === value.key)?.name ?? value.key : value.key || 'Unattributed (no model)',
     // Structural compatibility only: aggregateMode never renders request/reasoning fields.
     requests: 0, failures: 0, reasoning_tokens: 0,
     input_tokens: value.tokens.input + value.tokens.cache_read + value.tokens.cache_write, output_tokens: value.tokens.output, cache_read_tokens: value.tokens.cache_read,

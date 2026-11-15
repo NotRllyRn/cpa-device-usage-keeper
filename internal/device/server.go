@@ -240,11 +240,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/v1/usage-boundary":
 		q := r.URL.Query()
-		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 {
+		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 || !validModelFamily(q.Get("family")) {
 			fail(w, 400, "invalid filters")
 			return
 		}
-		day, err := s.store.EarliestUsageDay(r.Context(), q.Get("device"), q.Get("agent"))
+		day, err := s.store.EarliestUsageDay(r.Context(), q.Get("device"), q.Get("agent"), q.Get("family"))
 		if err != nil {
 			fail(w, 503, "usage boundary unavailable; retry")
 			return
@@ -260,7 +260,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 || q.Get("end") != "" && q.Get("start") > q.Get("end") {
+		if len(q.Get("device")) > 160 || len(q.Get("agent")) > 160 || !validModelFamily(q.Get("family")) || q.Get("end") != "" && q.Get("start") > q.Get("end") {
 			fail(w, 400, "invalid filters")
 			return
 		}
@@ -268,7 +268,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/analysis" {
 			read = s.store.Analysis
 		}
-		overview, err := read(r.Context(), q.Get("device"), q.Get("agent"), q.Get("start"), q.Get("end"))
+		overview, err := read(r.Context(), q.Get("device"), q.Get("agent"), q.Get("start"), q.Get("end"), q.Get("family"))
 		if err != nil {
 			fail(w, 503, strings.TrimPrefix(r.URL.Path, "/v1/")+" unavailable; narrow the range or retry")
 			return

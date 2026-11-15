@@ -36,7 +36,7 @@ func TestAnalysisMatrixPricingAndFilters(t *testing.T) {
 	}
 	read := func(device, agent, start, end string) Overview {
 		t.Helper()
-		out, err := s.Analysis(context.Background(), device, agent, start, end)
+		out, err := s.Analysis(context.Background(), device, agent, start, end, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,8 +86,8 @@ func TestAnalysisMatrixPricingAndFilters(t *testing.T) {
 	if got.Cells[1].Coverage.Missing != 1 || got.Cells[1].Coverage.Priced != 0 || got.Cells[1].Complete || got.Cells[1].Cost != 0 {
 		t.Fatal(got)
 	}
-	overview, err := s.Overview(context.Background(), "", "", "", "")
-	if err != nil || len(overview.Cells) != 0 || len(overview.Models) != 2 {
+	overview, err := s.Overview(context.Background(), "", "", "", "", "")
+	if err != nil || len(overview.Cells) != 0 || len(overview.Models) != 3 {
 		t.Fatalf("overview changed: %+v %v", overview, err)
 	}
 }
@@ -114,7 +114,7 @@ func TestAnalysisRejectsOversizedDimensions(t *testing.T) {
 	if _, err = s.Apply(token, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Analysis(context.Background(), "", "", "", ""); err == nil {
+	if _, err = s.Analysis(context.Background(), "", "", "", "", ""); err == nil {
 		t.Fatal("oversized analysis silently accepted")
 	}
 }
