@@ -124,6 +124,10 @@ DEVICE_TEST_CHROMIUM=/path/to/chrome \
 node scripts/fuzz-device-ui.mjs
 ```
 
+The fixture reduces one synthetic ledger into daily totals, rankings and unique
+range-level device/model cells. Check conservation independently with
+`node --test scripts/device-ui-fixture.test.mjs`.
+
 It serves only `web/device-dist` on an ephemeral loopback port, stubs API reads
 and price saves, and blocks non-local requests. It never enrolls or revokes a
 real device. Defaults: seeds `173,947,2027`, 120 actions each, six viewport widths,

@@ -358,7 +358,6 @@ export function TimeRangeControl({
     if (nextMode === 'custom') {
       if (!customEnabled) return;
       prepareCustomDraft();
-      if (allTime?.active && customRange) onChange('custom', customRange);
       setPendingMode('custom');
       return;
     }

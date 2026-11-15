@@ -27,7 +27,8 @@ import { emptyAnalysis, renderAnalysisPanel } from './analysisFixtures';
 const analysisPanelStyles = readFileSync(resolve(process.cwd(), 'src/components/usage/analysis/AnalysisPanel.module.scss'), 'utf8').replace(/\r\n/g, '\n');
 
 const styleRuleBlock = (selector: string) => {
-  const start = analysisPanelStyles.indexOf(selector);
+  // Inspect the shared rule, not an indented device-only override of it.
+  const start = analysisPanelStyles.indexOf(`\n${selector}`);
   expect(start).toBeGreaterThanOrEqual(0);
   const open = analysisPanelStyles.indexOf('{', start);
   const close = analysisPanelStyles.indexOf('\n}', open);

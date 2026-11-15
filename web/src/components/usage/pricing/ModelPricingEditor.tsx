@@ -45,6 +45,7 @@ export interface ModelPricingEditorProps {
   initialConfig: ModelPricingConfig | null
   modelOptions: string[]
   timezone?: string
+  aggregateMode?: boolean
   locked?: boolean
   onClose: () => void
   onSave: (config: ModelPricingConfig) => Promise<unknown>
@@ -138,7 +139,7 @@ function validatedConfig(draft: EditorDraft): { config: ModelPricingConfig | nul
 }
 
 // 单窗编辑默认价格、模型倍率与条件倍率，提交失败才展示字段错误；取消不保存。
-export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone, locked = false, onClose, onSave }: ModelPricingEditorProps) {
+export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone, aggregateMode = false, locked = false, onClose, onSave }: ModelPricingEditorProps) {
   const { t } = useTranslation()
   const formId = useId().replaceAll(':', '')
   const formRef = useRef<HTMLFormElement | null>(null)
@@ -317,7 +318,7 @@ export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone
         value={value} onChange={(event) => onChange(event.target.value)} disabled={saving || locked}
         data-pricing-field={path} aria-invalid={Boolean(error)}
         aria-describedby={error ? descriptionId : undefined} />
-      {error ? <span id={descriptionId} className={styles.screenReaderOnly}>
+      {error ? <span id={descriptionId} className={aggregateMode ? styles.fieldError : styles.screenReaderOnly}>
         {t(`usage_stats.pricing_settings_error_${['required', 'invalid', 'duplicate', 'conflict'].includes(error) ? error : 'invalid'}`)}
       </span> : null}
     </label>
@@ -329,7 +330,7 @@ export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone
       <Button type="button" variant="secondary" appearance="action" onClick={() => setBranchSession(null)}>{t('common.cancel')}</Button>
       <Button type="submit" form={`${formId}-branch`} appearance="action" disabled={locked}>{t('usage_stats.pricing_settings_save_branch')}</Button>
     </div> : <div className={styles.editorFooter}>
-      <p className={styles.historyNotice}><IconInfo size={16} />{t('usage_stats.pricing_settings_history_notice')}</p>
+      <p className={styles.historyNotice}><IconInfo size={16} />{aggregateMode ? 'Historical estimates are recalculated from uploaded totals using the configured prices on every read. Saving refreshes those estimates; uploaded tokens are unchanged.' : t('usage_stats.pricing_settings_history_notice')}</p>
         <div className={styles.footerActions}>
         <Button type="button" variant="secondary" appearance="action" disabled={saving} onClick={onClose}>{t('common.cancel')}</Button>
         <Button type="submit" form={formId} appearance="action" disabled={locked} loading={saving}>{t('common.save')}</Button>
@@ -354,7 +355,7 @@ export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone
             setDraft((current) => ({ ...current, model }))
             setErrors({}); setRequestError(''); setShakeAttempt(0); focusPath.current = null
           }} />
-        {errors.model ? <span id={`${formId}-model-error`} className={styles.screenReaderOnly}>
+        {errors.model ? <span id={`${formId}-model-error`} className={aggregateMode ? styles.fieldError : styles.screenReaderOnly}>
           {t(`usage_stats.pricing_settings_error_${errors.model === 'required' ? 'required' : 'invalid'}`)}
         </span> : null}
       </label> : <h3>{t('usage_stats.pricing_settings_default_prices')}</h3>}
@@ -363,7 +364,7 @@ export function ModelPricingEditor({ open, initialConfig, modelOptions, timezone
             ariaLabel={t('usage_stats.model_price_style')} ariaDescribedBy={errors.pricing_style ? `${formId}-pricing-style-error` : undefined}
             options={['openai', 'claude'].map((value) => ({ value, label: t(`usage_stats.model_price_style_${value}`) }))}
             onChange={(value) => { setDraft((current) => ({ ...current, pricingStyle: value as PricingStyle })); clearError('pricing_style') }} />
-          {errors.pricing_style ? <span id={`${formId}-pricing-style-error`} className={styles.screenReaderOnly}>
+          {errors.pricing_style ? <span id={`${formId}-pricing-style-error`} className={aggregateMode ? styles.fieldError : styles.screenReaderOnly}>
             {t('usage_stats.pricing_settings_error_invalid')}
           </span> : null}
         </label>

@@ -92,6 +92,83 @@ func TestAnalysisMatrixPricingAndFilters(t *testing.T) {
 	}
 }
 
+func TestAnalysisMatrixConservesAcrossDaysDevicesAndFilters(t *testing.T) {
+	s, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	firstID, firstToken, _ := s.Enroll("first")
+	_, secondToken, _ := s.Enroll("second")
+	for _, token := range []string{firstToken, secondToken} {
+		for _, day := range []string{"2026-01-02", "2026-01-03", "2026-01-04"} {
+			for _, agent := range []string{"pi", "codex"} {
+				snapshot := sample()
+				snapshot.Day, snapshot.Agent = day, agent
+				snapshot.CollectedAt = snapshot.CollectedAt.AddDate(0, 0, 5)
+				snapshot.TotalTokens += 7 // Unattributed cells must also conserve.
+				if _, err := s.Apply(token, snapshot); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+	price := pricing.ModelPricingConfig{Model: "model-test", PricingStyle: "openai", ModelMultiplier: 1, BasePrices: pricing.BasePrices{Input: 1, Output: 2}, ConditionalMultipliers: []pricing.RuleConfig{}, Branches: []pricing.PriceBranch{}}
+	for _, priced := range []bool{true, false} {
+		if priced {
+			err = s.SavePrice(price)
+		} else {
+			err = s.DeletePrice(price.Model)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, scope := range [][4]string{{}, {firstID, "pi", "2026-01-03", "2026-01-04"}} {
+			out, err := s.Analysis(context.Background(), scope[0], scope[1], scope[2], scope[3], "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var total int64
+			var cost float64
+			seen := map[[2]string]bool{}
+			for _, cell := range out.Cells {
+				key := [2]string{cell.Device, cell.Model}
+				if seen[key] {
+					t.Fatalf("duplicate range cell: %v", key)
+				}
+				seen[key] = true
+				total += cell.Total
+				cost += cell.Cost
+			}
+			if total != out.Total.Total || math.Abs(cost-out.Total.Cost) > 1e-12 {
+				t.Fatalf("matrix differs from range total: %+v", out)
+			}
+			for _, model := range out.Models {
+				var sum int64
+				for _, cell := range out.Cells {
+					if cell.Model == model.Key {
+						sum += cell.Total
+					}
+				}
+				if sum != model.Total {
+					t.Fatalf("matrix differs from model ranking: %s %d != %d", model.Key, sum, model.Total)
+				}
+			}
+			for _, device := range out.Devices {
+				var sum int64
+				for _, cell := range out.Cells {
+					if cell.Device == device.Key {
+						sum += cell.Total
+					}
+				}
+				if sum != device.Total {
+					t.Fatalf("matrix differs from device total: %s", device.Key)
+				}
+			}
+		}
+	}
+}
+
 func TestAnalysisRejectsOversizedDimensions(t *testing.T) {
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)

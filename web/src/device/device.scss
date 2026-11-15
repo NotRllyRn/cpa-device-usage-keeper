@@ -18,6 +18,9 @@
     &[data-flow='split'] [data-dashboard-filters] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 }
+.device-filter-options [role='option'] { min-height: 44px; height: auto; }
+.device-filter-options [role='option'] > span:first-child { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
+[data-device-dashboard] main { container-type: inline-size; }
 .device-filter-value { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .device-context { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0 16px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 .device-metadata, .device-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
@@ -34,7 +37,7 @@
 [data-device-dashboard] .device-table th:first-child, [data-device-dashboard] .device-table td:first-child { position: sticky; left: 0; background: var(--bg-primary); z-index: 1; min-width: 144px; max-width: 240px; white-space: normal; overflow-wrap: anywhere; }
 [data-device-dashboard] > div, [data-device-dashboard] main, [data-device-dashboard] main > div { min-width: 0; }
 // Only the opt-in device range panels use opaque surfaces and larger presets.
-.modal:has([data-device-range]), [role='dialog']:has(> [data-device-range]) {
+[role='dialog']:has([data-device-range]) {
   background: var(--floating-surface);
   color: var(--text-primary);
   backdrop-filter: none;

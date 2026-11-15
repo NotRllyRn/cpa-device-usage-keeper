@@ -596,6 +596,8 @@
   background: var(--bg-primary);
 }
 
+.fieldError { color: var(--danger-color); font-size: 13px; line-height: 1.4; }
+
 .requestError {
   margin: 0;
   padding: 12px;

@@ -134,6 +134,19 @@ describe('PricingSettings', () => {
     expect(container.textContent).toContain('usage_stats.pricing_settings_price_unit')
   })
 
+  it.each([false, true])('keeps upstream copy by default and exposes aggregate price errors (%s)', async aggregateMode => {
+    await renderSettings({ aggregateMode })
+    await act(async () => button('common.edit').click())
+    const input = document.querySelector<HTMLInputElement>('[data-pricing-field="base_prices.input"]')!
+    await setInput(input, '-1')
+    await act(async () => button('common.save').click())
+    const error = document.getElementById(input.getAttribute('aria-describedby')!)!
+    expect(error.textContent).toContain('pricing_settings_error_invalid')
+    expect(error.className).toMatch(aggregateMode ? /fieldError/ : /screenReaderOnly/)
+    expect(document.body.textContent?.includes('Historical estimates are recalculated')).toBe(aggregateMode)
+    expect(document.body.textContent?.includes('usage_stats.pricing_settings_history_notice')).toBe(!aggregateMode)
+  })
+
   it('filters the complete list locally by model name without changing the total or making requests', async () => {
     configs.push({ ...structuredClone(existing), model: 'openai/gpt-5' }, { ...structuredClone(existing), model: 'fast-alias' })
     await renderSettings()

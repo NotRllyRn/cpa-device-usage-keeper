@@ -1010,7 +1010,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
           </div>
           <div>
             <dt>{t('usage_stats.analysis_cost_per_million_tokens')}</dt>
-            <dd title={t('usage_stats.analysis_blended_rate')}>{aggregateMode && hasUnavailableCost ? 'Unknown' : formatUsd(getCostRatePerMillion(totalCost, totalTokens))}</dd>
+            <dd title={t('usage_stats.analysis_blended_rate')}>{aggregateMode && totalTokens === 0 ? 'N/A — no tokens' : aggregateMode && hasUnavailableCost ? 'Unknown' : formatUsd(getCostRatePerMillion(totalCost, totalTokens))}</dd>
           </div>
         </dl>
       )}

@@ -991,18 +991,21 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  // Aggregate adapters have two daily metrics, not the upstream three. Reserve
-  // no phantom third row and let long cost values wrap instead of stretching
-  // all four cards to the height of a narrow explanatory paragraph.
+  // Container width also responds to CSS zoom, unlike viewport media queries.
+  @container (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
+
+  // Aggregate adapters have two daily metrics, not the upstream three.
+  .dailyAverageCardHeader { flex-wrap: wrap; }
   .dailyAverageMetrics { grid-template-rows: repeat(2, auto); flex: 0; }
   .dailyAverageMetric { grid-template-columns: 28px minmax(0, 1fr); gap: 6px 10px; }
-  .dailyAverageMetricValue { grid-column: 2; font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
+  .dailyAverageMetricValue { grid-column: 2; font-size: 18px; white-space: nowrap; }
   .dailyAverageMetricLabel { white-space: normal; overflow: visible; color: var(--text-secondary); font-size: 12px; }
   .dailyAverageCostHint { color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
   .dailyAverageTitle { white-space: normal; }
-  .dailyAverageRangePill { flex-shrink: 0; font-size: 11px; }
+  .dailyAverageRangePill { flex-shrink: 0; font-size: 11px; white-space: nowrap; }
   .statLabel, .statSubtle { color: var(--text-secondary); }
-  .statValue { font-size: clamp(24px, 2.3vw, 32px); overflow-wrap: anywhere; }
+  .statValue { font-size: clamp(24px, 2.3cqw, 32px); white-space: nowrap; }
 }
 
 .primaryStatSlot {
@@ -3880,6 +3883,10 @@
   gap: 3px;
   min-width: 148px;
   text-align: right;
+}
+
+:global([data-device-dashboard]) {
+  .activitySummaryLabel, .activitySummaryDetails, .activityCardEmpty { color: var(--text-secondary); font-size: 12px; }
 }
 
 .activitySummaryLabel {

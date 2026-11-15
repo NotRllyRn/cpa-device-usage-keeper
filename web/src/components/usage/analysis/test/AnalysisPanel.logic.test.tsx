@@ -138,6 +138,12 @@ describe('AnalysisPanel token chart data', () => {
     expect(html).toContain('no-upload days are excluded, not zero');
   });
 
+  it('does not fabricate a cost-per-token rate for zero uploaded tokens in aggregate mode', () => {
+    const analysis = { ...emptyAnalysis, token_usage: [tokenBucket({ total_tokens: 0, input_tokens: 0, output_tokens: 0 })] };
+    expect(renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} aggregateMode />)).toContain('N/A — no tokens');
+    expect(renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} />)).not.toContain('N/A — no tokens');
+  });
+
   it('keeps a genuine priced zero cost axis in aggregate mode', () => {
     renderToStaticMarkup(<AnalysisTestPanel analysis={{ ...emptyAnalysis, token_usage: [tokenBucket()] }} aggregateMode />);
     expect(chartCapture.barOptions?.scales?.cost?.display).toBe(true);

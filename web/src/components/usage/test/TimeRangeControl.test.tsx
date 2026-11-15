@@ -62,7 +62,16 @@ describe('TimeRangeControl', () => {
     expect(document.querySelector('[data-all-time-summary]')?.textContent).toContain('2024-01-01');
     expect(document.querySelector('[data-custom-endpoint]')).toBeNull();
     await click('[data-time-range-mode="custom"]');
+    expect(document.querySelector('[data-custom-endpoint]')).not.toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    await click('[data-custom-summary-cancel]');
+    expect(onChange).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.textContent).toContain('All time');
+    await click('[data-time-range-trigger="desktop"]');
+    await click('[data-time-range-mode="custom"]');
+    await click('[data-custom-summary-apply]');
     expect(onChange).toHaveBeenCalledWith('custom', {unit:'day',start:'2024-01-01',end:'2026-11-09'});
+    await click('[data-time-range-trigger="desktop"]');
     await click('[data-time-range-mode="all"]');
     expect(onSelect).toHaveBeenCalledOnce();
   });
