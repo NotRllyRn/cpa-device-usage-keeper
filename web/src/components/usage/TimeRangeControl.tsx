@@ -575,7 +575,10 @@ export function TimeRangeControl({
       onCustomCancel={handleCustomCancel}
     />
   );
-  const currentLabel = allTime?.active ? `All time · ${formatCurrentLabel()}` : formatCurrentLabel();
+  // All time is device opt-in. Keep its resolved dates in the accessible name
+  // and the range panel, rather than making the whole toolbar fit two dates.
+  const currentLabel = allTime?.active ? 'All time' : formatCurrentLabel();
+  const accessibleLabel = allTime?.active ? `All time · ${formatCurrentLabel()}` : currentLabel;
 
   return (
     <div className={styles.controlRoot}>
@@ -586,7 +589,8 @@ export function TimeRangeControl({
           type="button"
           className={styles.desktopTrigger}
           data-time-range-trigger="desktop"
-          aria-label={`${ariaLabel}: ${currentLabel}`}
+          aria-label={`${ariaLabel}: ${accessibleLabel}`}
+          title={allTime ? accessibleLabel : undefined}
           aria-haspopup="dialog"
           aria-expanded={desktopOpen}
           onClick={toggleDesktopPopover}
@@ -604,7 +608,8 @@ export function TimeRangeControl({
           type="button"
           className={styles.mobileTrigger}
           data-time-range-trigger="mobile"
-          aria-label={`${ariaLabel}: ${currentLabel}`}
+          aria-label={`${ariaLabel}: ${accessibleLabel}`}
+          title={allTime ? accessibleLabel : undefined}
           aria-haspopup="dialog"
           aria-expanded={mobileOpen}
           onClick={openMobileModal}

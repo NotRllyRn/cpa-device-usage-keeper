@@ -28,6 +28,19 @@ describe('calculateTokenActivityLevels', () => {
 });
 
 describe('TokenActivityCard', () => {
+  it('distinguishes no upload from an uploaded zero without announcing unknown usage as zero', () => {
+    const activity = buildUsageActivityFixture([0, 0]);
+    activity.blocks = activity.blocks.slice(0, 2);
+    const html = renderToStaticMarkup(createElement(TokenActivityCard, {
+      activity, loading: false, requestIdentity: 'device', aggregateMode: true,
+      observedBuckets: [false, true],
+    }));
+    expect(html).toContain('No upload · usage unknown');
+    expect(html).toContain('Uploaded · Total 0');
+    expect(html.match(/data-activity-missing="true"/g)).toHaveLength(1);
+    expect(html.match(/data-activity-missing="false"/g)).toHaveLength(1);
+  });
+
   it('renders canonical Token totals and the shared 364-cell grid', () => {
     const activity = buildUsageActivityFixture([1_234]);
     const html = renderToStaticMarkup(createElement(TokenActivityCard, {

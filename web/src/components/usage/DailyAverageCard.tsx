@@ -13,7 +13,7 @@ interface DailyAverageMetrics {
   costAvailable: boolean;
 }
 
-export interface CostDisplay { label: string; value: string; hint?: string }
+export interface CostDisplay { label: string; value: string; hint?: string; details?: string }
 
 interface DailyAverageCardProps {
   costDisplay?: CostDisplay;
@@ -98,9 +98,9 @@ export function DailyAverageCard({ usage, loading, aggregateMode = false, costDi
   ];
 
   return (
-    <section className={`${styles.statCard} ${styles.dailyAverageCard}`} aria-label={t('usage_stats.daily_average')}>
+    <section className={`${styles.statCard} ${styles.dailyAverageCard}`} data-device-average={aggregateMode ? '' : undefined} aria-label={t('usage_stats.daily_average')}>
       <div className={styles.dailyAverageCardHeader}>
-        <span className={styles.dailyAverageTitle}>{t('usage_stats.daily_average')}</span>
+        <span className={styles.dailyAverageTitle}>{aggregateMode ? 'Calendar-day average' : t('usage_stats.daily_average')}</span>
         {metrics && (
           <span className={styles.dailyAverageRangePill}>
             {t('usage_stats.daily_average_range', { days: formatRangeDays(metrics.rangeDays) })}

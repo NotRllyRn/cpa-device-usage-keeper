@@ -49,12 +49,15 @@ describe('TimeRangeControl', () => {
 
   it('offers All time only when opted in and keeps multi-year custom dates', async () => {
     await renderControl('7d');
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.getAttribute('title')).toBeNull();
     await click('[data-time-range-trigger="desktop"]');
     expect(document.querySelector('[data-time-range-mode="all"]')).toBeNull();
     const onSelect = vi.fn();
     const onChange = vi.fn();
     await act(async () => root.render(<TimeRangeControl dailyOnly value="custom" customRange={{unit:'day',start:'2024-01-01',end:'2026-11-09'}} onChange={onChange} ariaLabel="Range" timeZone="UTC" maxCustomDayRangeDays={3660} showCustomRangeYear allTime={{active:true,onSelect}} />));
-    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.textContent).toContain('2024');
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.textContent).toContain('All time');
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.getAttribute('aria-label')).toContain('2024');
+    expect(document.querySelector('[data-time-range-trigger="desktop"]')?.getAttribute('title')).toContain('2026');
     expect(document.querySelector('[data-time-range-mode="all"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(document.querySelector('[data-all-time-summary]')?.textContent).toContain('2024-01-01');
     expect(document.querySelector('[data-custom-endpoint]')).toBeNull();

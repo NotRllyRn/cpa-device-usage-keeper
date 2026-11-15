@@ -174,6 +174,26 @@ button.analysisLegendItem {
   }
 }
 
+.analysisPanel[data-aggregate-analysis] {
+  .pairedChartCard {
+    height: auto;
+    grid-template-rows: auto auto auto auto;
+    align-content: start;
+  }
+  .topModelsCard { grid-template-rows: auto auto auto; }
+  .rankingList { max-height: 360px; }
+  .emptyState { min-height: 100px; }
+  // The upstream mobile view releases labels; device matrices need row context
+  // while scrolling through token and cost totals.
+  .heatmapKeyColumn { position: sticky; left: 0; }
+  .heatmapSummaryCell { height: auto; min-height: 42px; padding-block: 4px; text-align: center; }
+  .heatmapTotalTokenValue, .heatmapTotalCostValue { white-space: normal; overflow: visible; overflow-wrap: anywhere; font-size: 11px; line-height: 1.3; }
+  .heatmapScroller [tabindex] { scroll-margin-block: 200px 24px; }
+  @include mobile {
+    .heatmapGrid { --heatmap-key-column-width: 112px; }
+  }
+}
+
 .pairedChartToolbar {
   display: flex;
   align-items: center;

@@ -1,6 +1,38 @@
-// The device toolbar has three filters; give the date range its own full row
-// when the shared toolbar splits, rather than squeezing it into device width.
-[data-keeper-page] [data-flow='split'] [data-dashboard-filter]:has([data-time-range-shell]) { grid-column: 1 / -1; }
+// Three device filters + a range: one row when it fits, otherwise a deliberate
+// navigation row and a four-column filter row (two columns on narrow screens).
+[data-device-dashboard] [data-dashboard-toolbar] {
+  [data-dashboard-filter] { max-width: 190px; }
+  [data-dashboard-filter] > div > button { min-width: 0; }
+  [data-dashboard-filter] > div > button > span:first-of-type { overflow: hidden; }
+  [data-dashboard-filter] > div > button > span:last-of-type { flex-shrink: 0; }
+  [data-time-range-shell] > span { display: none; }
+  [data-time-range-trigger] { min-width: 0; }
+  [data-time-range-trigger] > svg { flex-shrink: 0; }
+  [data-time-range-value] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &[data-flow='split'] {
+    [data-dashboard-filters] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    [data-dashboard-filter], [data-dashboard-filter] > div { width: 100%; max-width: 100%; }
+    [data-dashboard-filter] > div > button, [data-time-range-shell], [data-time-range-trigger] { width: 100%; }
+  }
+  @container (max-width: 650px) {
+    &[data-flow='split'] [data-dashboard-filters] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+}
+.device-filter-value { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.device-context { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0 16px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.device-metadata, .device-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.device-context-actions > button { min-height: 44px; padding-block: 6px; font-size: 13px; }
+.device-help summary, .device-cost-details summary { display: list-item; cursor: pointer; min-height: 44px; padding-block: 12px; color: var(--text-primary); }
+.device-help[open] { flex-basis: 100%; }
+.device-help p, .device-cost-details p { margin: 0 0 8px; line-height: 1.5; }
+.device-cost-details { width: 100%; color: var(--text-secondary); font-size: 13px; }
+.device-cost-details summary { padding-block: 10px; }
+[data-device-dashboard] [data-aggregate-ranking] [title] { white-space: normal; overflow-wrap: anywhere; }
+[data-device-dashboard] [data-activity-missing='true'] > div:first-child { background: transparent; outline: 1px dashed var(--border-color); outline-offset: -1px; }
+[data-device-dashboard] .device-note { margin: 0; }
+[data-device-dashboard] .device-table { min-width: 0; max-width: 100%; }
+[data-device-dashboard] .device-table th:first-child, [data-device-dashboard] .device-table td:first-child { position: sticky; left: 0; background: var(--bg-primary); z-index: 1; min-width: 144px; max-width: 240px; white-space: normal; overflow-wrap: anywhere; }
+[data-device-dashboard] > div, [data-device-dashboard] main, [data-device-dashboard] main > div { min-width: 0; }
 // Only the opt-in device range panels use opaque surfaces and larger presets.
 .modal:has([data-device-range]), [role='dialog']:has(> [data-device-range]) {
   background: var(--floating-surface);

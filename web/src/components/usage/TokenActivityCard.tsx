@@ -24,12 +24,13 @@ export function calculateTokenActivityLevels(values: readonly number[]): number[
 
 export interface TokenActivityCardProps {
   aggregateMode?: boolean;
+  observedBuckets?: boolean[];
   activity: UsageActivityResponse | null;
   loading: boolean;
   requestIdentity: string;
 }
 
-export function TokenActivityCard({ activity, loading, requestIdentity, aggregateMode = false }: TokenActivityCardProps) {
+export function TokenActivityCard({ activity, loading, requestIdentity, aggregateMode = false, observedBuckets }: TokenActivityCardProps) {
   const { t, i18n } = useTranslation();
   const blocks = useMemo(() => activity?.blocks ?? [], [activity]);
   const levels = useMemo(() => calculateTokenActivityLevels(blocks.map((block) => block.total_tokens)), [blocks]);
@@ -75,10 +76,11 @@ export function TokenActivityCard({ activity, loading, requestIdentity, aggregat
           timeZone={projectTimeZone}
           requestIdentity={requestIdentity}
           ariaLabel={`${t('usage_stats.token_activity_title')}: ${t('usage_stats.token_activity_total_tokens')} ${numberFormatter.format(activity?.total_tokens ?? 0)}`}
+          isMissing={observedBuckets ? (_block, index) => !observedBuckets[index] : undefined}
           isIdle={(_block, index) => levels[index] === 0}
           getColor={(_block, index) => `var(--token-activity-level-${levels[index]})`}
-          getSummary={formatTokenSummary}
-          renderTooltipStats={(block) => (
+          getSummary={(block, index) => observedBuckets && !observedBuckets[index] ? 'No upload · usage unknown' : `${observedBuckets ? 'Uploaded · ' : ''}${formatTokenSummary(block)}`}
+          renderTooltipStats={(block, index) => observedBuckets && !observedBuckets[index] ? <span>No upload · usage unknown</span> : (
             <span className={styles.tokenActivityTooltipStats}>
               <span>{t('usage_stats.token_activity_total')} <strong>{formatCompactNumber(block.total_tokens)}</strong></span>
               <span>{t('usage_stats.token_activity_input')} <strong>{formatCompactNumber(block.input_tokens)}</strong></span>
@@ -93,6 +95,7 @@ export function TokenActivityCard({ activity, loading, requestIdentity, aggregat
         <div className={styles.activityCardEmpty}>{loading ? t('common.loading') : t('usage_stats.recent_activity_empty')}</div>
       )}
       <div className={styles.activityLegend}>
+        {observedBuckets && <><span className={styles.activityLegendBlock} style={{ background: 'transparent', outline: '1px dashed var(--border-color)' }} /><span>No upload</span><span>Uploaded:</span></>}
         <span className={styles.activityLegendLabel}>{t('usage_stats.token_activity_less')}</span>
         <div className={styles.activityLegendColors}>
           <span className={`${styles.activityLegendBlock} ${styles.activityHeatmapBlockIdle}`} />

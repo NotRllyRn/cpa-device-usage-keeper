@@ -130,6 +130,19 @@ describe('AnalysisPanel token chart data', () => {
     vi.restoreAllMocks();
   });
 
+  it('hides the aggregate cost axis and marks its legend unavailable when no cost is known', () => {
+    const analysis = { ...emptyAnalysis, token_usage: [tokenBucket({ cost_available: false })], cost_summary: { total_cost_usd: 0, cost_available: false } };
+    const html = renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} aggregateMode />);
+    expect(chartCapture.barOptions?.scales?.cost?.display).toBe(false);
+    expect(html).toContain('Cost unavailable');
+    expect(html).toContain('no-upload days are excluded, not zero');
+  });
+
+  it('keeps a genuine priced zero cost axis in aggregate mode', () => {
+    renderToStaticMarkup(<AnalysisTestPanel analysis={{ ...emptyAnalysis, token_usage: [tokenBucket()] }} aggregateMode />);
+    expect(chartCapture.barOptions?.scales?.cost?.display).toBe(true);
+  });
+
   it('splits cache read and write from input while keeping total tooltip values', () => {
     const analysis: AnalysisResponse = {
       ...emptyAnalysis,

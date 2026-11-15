@@ -929,16 +929,17 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
     cacheWrite: t('usage_stats.cache_creation_tokens'),
     reasoning: t('usage_stats.reasoning_tokens'),
     total: t('usage_stats.total_tokens'),
-    average: t('usage_stats.analysis_token_average'),
+    average: aggregateMode ? 'Avg / uploaded day' : t('usage_stats.analysis_token_average'),
     requests: t('usage_stats.requests_count'),
     cost: t('usage_stats.total_cost'),
-  }), [t]);
+  }), [aggregateMode, t]);
   const chartTheme = useMemo(() => getChartTheme(isDark), [isDark]);
   const averageTokenTotal = useMemo(() => calculateAverageTotalTokens(rows), [rows]);
   const [selectedMetric, setSelectedMetric] = useState<'all' | 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'cost'>('all');
   const metric = aggregateMode ? selectedMetric : 'all';
   const hasUnavailableCost = summary?.cost_available === false || rows.some((row) => !row.costAvailable);
   const chartRows = useMemo(() => aggregateMode && granularity === 'daily' ? withDailyChartGaps(rows) : rows, [aggregateMode, granularity, rows]);
+  const hasPlottedCost = rows.some(row => (row.costState ? row.costState !== 'unknown' : row.costAvailable));
   const chartData = useMemo(() => {
     const data = buildAnalysisTokenChartData(chartRows, tokenLabels);
     if (!aggregateMode) return data;
@@ -963,7 +964,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
     if (aggregateMode && options.scales) {
       if (options.scales.requests) options.scales.requests.display = false;
       if (options.scales.tokens) options.scales.tokens.display = metric !== 'cost';
-      if (options.scales.cost) options.scales.cost.display = metric === 'all' || metric === 'cost';
+      if (options.scales.cost) options.scales.cost.display = hasPlottedCost && (metric === 'all' || metric === 'cost');
       const callbacks = options.plugins?.tooltip?.callbacks;
       if (callbacks) {
         const label = callbacks.label;
@@ -981,7 +982,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
       }
     }
     return options;
-  }, [aggregateMode, metric, averageTokenTotal, chartTheme, isMobile, chartRows, tokenLabels.total, tokenLabels.cost]);
+  }, [aggregateMode, metric, hasPlottedCost, averageTokenTotal, chartTheme, isMobile, chartRows, tokenLabels.total, tokenLabels.cost]);
   const legendItems = useMemo(() => {
     const items = buildTokenLegendItems(tokenLabels, averageTokenTotal, chartTheme.averageLine);
     return aggregateMode ? [...items.filter(item => item.label !== tokenLabels.requests && item.label !== tokenLabels.reasoning), { label: 'Unattributed', color: '#94a3b8' }] : items;
@@ -1024,6 +1025,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
             {legendItems.map((item) => {
               const key = aggregateMode ? (['input', 'output', 'cacheRead', 'cacheWrite', 'cost'] as const).find(key => tokenLabels[key] === item.label) : undefined;
               if (aggregateMode && !key && metric !== 'all') return null;
+              if (aggregateMode && key === 'cost' && !hasPlottedCost) return <span key="cost-unavailable" className={styles.analysisLegendItem}>Cost unavailable</span>;
               const label = aggregateMode && key === 'cost' && hasUnavailableCost ? `${item.label} (partial / unknown)` : item.label;
               const content = <><span className={styles.analysisLegendDot} style={{ backgroundColor: item.color }} /><span className={styles.analysisLegendLabel}>{label}</span></>;
               return key ? <button key={key} type="button" className={styles.analysisLegendItem} title={label} aria-pressed={metric === key} onClick={() => setSelectedMetric(key)}>{content}</button> : (
@@ -1031,6 +1033,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
               );
             })}
           </div>
+          {aggregateMode && <p className="device-note">Average over {rows.length.toLocaleString()} uploaded days only; no-upload days are excluded, not zero.</p>}
           <div className={styles.tokenChartFrame}>
             <Bar data={chartData} options={chartOptions} plugins={[drawRequestsLineOnTopPlugin, drawTokenAverageLinePlugin]} />
           </div>
@@ -1053,6 +1056,7 @@ function TopModelsCard({ modelUsage, composition, deviceUsage, deviceComposition
   windowMinutes: number | null;
 }) {
   const { t } = useTranslation();
+  const aggregateMode = useAnalysisAggregate();
   const [dimension, setDimension] = useState<'model' | 'device'>('model');
   const showingDevices = Boolean(deviceUsage) && dimension === 'device';
   const highlight = useAnalysisHighlight(showingDevices ? 'device-trends' : 'models');
@@ -1067,7 +1071,7 @@ function TopModelsCard({ modelUsage, composition, deviceUsage, deviceComposition
 
   return (
     <section className={`${styles.analysisCard} ${styles.pairedChartCard} ${deviceUsage ? '' : styles.topModelsCard} keeper-card-surface`}>
-      <AnalysisCardHeader title={showingDevices ? 'Top Devices' : t('usage_stats.analysis_top_models_title')} showPricingHint={false} hint="" />
+      <AnalysisCardHeader title={showingDevices ? 'Device usage over time' : aggregateMode ? 'Model usage over time' : t('usage_stats.analysis_top_models_title')} showPricingHint={false} hint="" />
       {deviceUsage && <div className={styles.pairedChartToolbar}><div className={styles.compositionTabs} role="tablist" aria-label="Trend dimension">
         {(['model', 'device'] as const).map(value => <button key={value} type="button" role="tab" aria-selected={dimension === value} className={`${styles.compositionTab} ${dimension === value ? styles.compositionTabActive : ''}`} onClick={() => setDimension(value)}>{value === 'model' ? 'Model' : 'Device'}</button>)}
       </div></div>}
@@ -1158,7 +1162,7 @@ type CompositionTab = {
   items: AnalysisCompositionItem[];
 };
 
-function CompositionPanel({ tabs, loading, isDark, windowMinutes }: { tabs: CompositionTab[]; loading: boolean; isDark: boolean; windowMinutes: number | null }) {
+function CompositionPanel({ tabs, loading, isDark, isMobile, windowMinutes }: { tabs: CompositionTab[]; loading: boolean; isDark: boolean; isMobile: boolean; windowMinutes: number | null }) {
   const { t } = useTranslation();
   const aggregateMode = useAnalysisAggregate();
   const [activeTabId, setActiveTabId] = useState<CompositionTab['id']>(tabs[0]?.id ?? 'model');
@@ -1176,7 +1180,7 @@ function CompositionPanel({ tabs, loading, isDark, windowMinutes }: { tabs: Comp
   const tooltipLabels = useMemo(() => ({ totalTokens: t('usage_stats.total_tokens') }), [t]);
   const chartData = useMemo(() => buildCompositionChartData(rankingItems, highlighted?.key ?? null), [rankingItems, highlighted?.key]);
   const chartOptions = useMemo(() => buildCompositionChartOptions(chartTheme, tooltipLabels), [chartTheme, tooltipLabels]);
-  const chartLabels = useMemo(() => items.map((item) => ({ name: item.label, share: formatPercent(toNumber(item.percent)) })), [items]);
+  const chartLabels = useMemo(() => aggregateMode && isMobile ? [] : items.map((item) => ({ name: item.label, share: formatPercent(toNumber(item.percent)) })), [aggregateMode, isMobile, items]);
   const labelsPlugin = useMemo(() => createCompositionLabelsPlugin(chartLabels, chartTheme.textPrimary), [chartLabels, chartTheme.textPrimary]);
   // 已安装插件读取最新标签与主题，自动刷新不再靠 key 卸载整张环图。
   const liveLabelsPlugin = useRef(labelsPlugin);
@@ -1523,7 +1527,7 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
   const { t } = useTranslation();
   const aggregateMode = useAnalysisAggregate();
   const dimensionLabel = aggregateMode ? 'Device' : t('usage_stats.analysis_heatmap_api_key');
-  const displayCost = (cost: number, available: boolean) => aggregateMode && !available ? `Unknown (known ${formatUsd(cost)})` : formatUsd(cost);
+  const displayCost = (cost: number, available: boolean) => aggregateMode && !available ? cost > 0 ? `Partial ${formatUsd(cost)}` : 'Unknown' : formatUsd(cost);
   const [tooltip, setTooltip] = useState<FloatingTooltipState | null>(null);
   const cellMap = useMemo(() => new Map(cells.map((cell) => [`${cell.api_key}\0${cell.model}`, cell])), [cells]);
   // 固定汇总列按 API Key 聚合所有模型，确保与中间热力单元格使用同一数据口径。
@@ -1605,7 +1609,8 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
       ) : (
         <>
           <div className={styles.analysisChartSurface}>
-            <div className={styles.heatmapScroller}>
+            {aggregateMode && <p className="device-note device-scroll-cue" id="device-matrix-scroll">Scroll horizontally for all models and totals · focus the grid and use ← / →. Select a label or cell for full details.</p>}
+            <div className={styles.heatmapScroller} role={aggregateMode ? 'region' : undefined} aria-label={aggregateMode ? 'Device by model usage, horizontally scrollable' : undefined} aria-describedby={aggregateMode ? 'device-matrix-scroll' : undefined} tabIndex={aggregateMode ? 0 : undefined}>
               <div
                 className={styles.heatmapGrid}
                 style={{
@@ -1788,10 +1793,10 @@ export function AnalysisPanel({
   return (
     <AnalysisAggregateContext.Provider value={aggregateMode}>
     <ChartLifecycleProvider queryKey={modelSpeedQueryKey} source={analysis} refreshSignal={chartRefreshSignal}>
-    <div className={styles.analysisPanel}>
+    <div className={styles.analysisPanel} data-aggregate-analysis={aggregateMode || undefined}>
       <TokenUsageChart granularity={analysis?.granularity} costDisplay={costDisplay} rows={tokenRows} summary={analysis?.cost_summary} loading={loading} isDark={isDark} isMobile={isMobile} />
       <div className={styles.insightGrid}>
-        <CompositionPanel tabs={compositionTabs} loading={loading} isDark={isDark} windowMinutes={analysisWindowMinutes} />
+        <CompositionPanel tabs={compositionTabs} loading={loading} isDark={isDark} isMobile={isMobile} windowMinutes={analysisWindowMinutes} />
         <TopModelsCard
           deviceUsage={deviceUsage}
           deviceComposition={analysis?.api_key_composition}

@@ -6,7 +6,8 @@ PricingSettings and CompletePricingSyncModal. Optional aggregate capabilities
 leave the default upstream behavior unchanged. No request events are created.
 
 `web/src/device/dashboard.ts` converts daily totals into the shared view contracts.
-Dates are UTC; missing days contribute zero to the selected calendar-day average.
+Dates are UTC. Overview divides uploaded totals by the selected calendar-day
+count; days without an upload remain unknown, not reported zero activity.
 Token Trends uses actual daily model/device totals, not inferred hourly traffic.
 Model distribution excludes unattributed tokens; overall totals retain them.
 Request health, request counts, throughput, latency and reasoning breakdowns are
@@ -22,7 +23,8 @@ with a three-second context deadline and boundary indexes, independent of the
 current date range. Empty history uses today and displays an explanation. The
 intent survives filter changes, refreshes and UTC midnight; refresh (or returning
 to the tab) discovers late older uploads. Selecting another range clears it.
-The resolved dates are shown as a custom range, without clipping to 365 days.
+The resolved dates are stored as a custom range, without clipping to 365 days.
+The compact All time trigger keeps full dates in accessible help and the range menu.
 
 Device rendering explicitly rejects more than 3,660 calendar days or 100,000
 dense model/device chart points; no partial totals are displayed. The existing
@@ -111,6 +113,25 @@ models or devices → Analysis, server/adapter limit errors, narrowing filters t
 recover, and delayed responses during tab/filter changes. Loaded views are tied
 to their endpoint/query scope; adapters run inside the request error handler,
 not during rendering.
+
+### Seeded layout and interaction checks
+
+Build the device UI, then run the local-only synthetic Playwright harness:
+
+```sh
+DEVICE_TEST_PLAYWRIGHT=/path/to/node_modules/playwright \
+DEVICE_TEST_CHROMIUM=/path/to/chrome \
+node scripts/fuzz-device-ui.mjs
+```
+
+It serves only `web/device-dist` on an ephemeral loopback port, stubs API reads
+and price saves, and blocks non-local requests. It never enrolls or revokes a
+real device. Defaults: seeds `173,947,2027`, 120 actions each, six viewport widths,
+both themes, and a deterministic screenshot matrix. `DEVICE_UI_SEEDS`,
+`DEVICE_UI_ACTIONS`, `DEVICE_UI_MODE=screens|fuzz|all`, and `DEVICE_UI_OUTPUT`
+override these settings. Output includes `report.json` (coverage and limitations),
+per-seed replay sequences, and screenshots; failures include the action and image.
+CSS 200% zoom is only a proxy, not a native browser-zoom or assistive-tech check.
 
 These tests do not establish deployed CPA plugin compatibility or replace native
 host lifecycle checks before deployment. No production deployment is performed.

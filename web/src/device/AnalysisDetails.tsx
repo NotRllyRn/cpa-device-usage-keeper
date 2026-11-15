@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Select } from '@/components/ui/Select';
 import type { Device, Overview } from './api';
+import { deviceCostText } from './costs';
 import styles from '@/components/usage/analysis/AnalysisPanel.module.scss';
 
 export function AnalysisDetails({ data, devices }: { data: Overview; devices: Device[] }) {
@@ -18,7 +19,7 @@ export function AnalysisDetails({ data, devices }: { data: Overview; devices: De
       <tbody>{rows.map(row => <tr key={row.key}><td>{dimension === 'devices' ? names.get(row.key) || row.key : row.key || 'Unattributed (no model)'}</td>
         <td>{number(row.tokens.input)}</td><td>{number(row.tokens.output)}</td><td>{number(row.tokens.cache_read)}</td><td>{number(row.tokens.cache_write)}</td>
         <td>{number(row.total_tokens-row.tokens.input-row.tokens.output-row.tokens.cache_read-row.tokens.cache_write)}</td><td>{number(row.total_tokens)}</td>
-        <td>{row.complete ? `$${row.known_cost.toFixed(6)}` : `Unknown (known $${row.known_cost.toFixed(6)})`}</td></tr>)}</tbody>
+        <td>{deviceCostText(row)}</td></tr>)}</tbody>
     </table>{rows.length === 0 && <p>No data</p>}</div>
   </section>;
 }

@@ -268,6 +268,7 @@ export function StatCards({
               {costDisplay ? costDisplay.hint : t('usage_stats.cost_need_price')}
             </span>
           )}
+          {!loading && costDisplay?.details && <details className="device-cost-details"><summary>Cost coverage</summary><p>{costDisplay.details}</p></details>}
         </>
       ),
       trend: sparklines.cost,
@@ -280,6 +281,8 @@ export function StatCards({
     <div
       key={card.key}
       className={styles.statCard}
+      data-device-stat={aggregateMode ? card.key : undefined}
+      data-token-total={aggregateMode && card.key === 'tokens' && !loading ? usageSnapshot?.total_tokens : undefined}
       style={
         {
           '--accent': card.accent,
@@ -314,6 +317,7 @@ export function StatCards({
     <div className={styles.statsSection}>
       <div
         className={`${styles.primaryStatsRow} ${dailyAverageExpanded ? styles.primaryStatsRowExpanded : ''} ${aggregateMode ? styles.aggregateStatsRow : ''}`.trim()}
+        data-device-stat-row={aggregateMode ? '' : undefined}
       >
         <div className={styles.dailyAverageSlot} aria-hidden={!dailyAverageExpanded}>
           <DailyAverageCard costDisplay={dailyAverageCostDisplay} aggregateMode={aggregateMode} usage={dailyAverageUsage} loading={loading} />

@@ -66,6 +66,7 @@ export interface ActivityHeatmapGridProps {
   requestIdentity: string;
   ariaLabel: string;
   isIdle: (block: UsageActivityBlock, index: number) => boolean;
+  isMissing?: (block: UsageActivityBlock, index: number) => boolean;
   getColor: (block: UsageActivityBlock, index: number) => string | undefined;
   getSummary: (block: UsageActivityBlock, index: number) => string;
   renderTooltipStats: (block: UsageActivityBlock, index: number) => ReactNode;
@@ -78,6 +79,7 @@ export function ActivityHeatmapGrid({
   requestIdentity,
   ariaLabel,
   isIdle,
+  isMissing,
   getColor,
   getSummary,
   renderTooltipStats,
@@ -282,6 +284,7 @@ export function ActivityHeatmapGrid({
               aria-rowindex={(index % ACTIVITY_GRID_ROWS) + 1}
               aria-colindex={Math.floor(index / ACTIVITY_GRID_ROWS) + 1}
               aria-label={`${timeRange}: ${getSummary(block, index)}`}
+              data-activity-missing={isMissing?.(block, index)}
               data-activity-index={index}
               data-activity-start={block.start_time}
               data-activity-end={block.end_time}

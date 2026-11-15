@@ -990,6 +990,19 @@
   @include mobile {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  // Aggregate adapters have two daily metrics, not the upstream three. Reserve
+  // no phantom third row and let long cost values wrap instead of stretching
+  // all four cards to the height of a narrow explanatory paragraph.
+  .dailyAverageMetrics { grid-template-rows: repeat(2, auto); flex: 0; }
+  .dailyAverageMetric { grid-template-columns: 28px minmax(0, 1fr); gap: 6px 10px; }
+  .dailyAverageMetricValue { grid-column: 2; font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
+  .dailyAverageMetricLabel { white-space: normal; overflow: visible; color: var(--text-secondary); font-size: 12px; }
+  .dailyAverageCostHint { color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+  .dailyAverageTitle { white-space: normal; }
+  .dailyAverageRangePill { flex-shrink: 0; font-size: 11px; }
+  .statLabel, .statSubtle { color: var(--text-secondary); }
+  .statValue { font-size: clamp(24px, 2.3vw, 32px); overflow-wrap: anywhere; }
 }
 
 .primaryStatSlot {

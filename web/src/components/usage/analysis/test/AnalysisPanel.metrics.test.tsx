@@ -69,7 +69,7 @@ it.each([
   expect(capture.options?.scales?.requests?.display).toBe(false);
   expect(capture.options?.plugins).not.toHaveProperty('analysisTokenAverageLine');
   expect(capture.options?.plugins?.tooltip?.callbacks?.footer).toBeUndefined();
-  expect(group().textContent).not.toMatch(/analysis_token_average|Unattributed/);
+  expect(group().textContent).not.toMatch(/Avg \/ uploaded day|Unattributed/);
 
   await render([{ ...bucket, input_tokens: 2000, output_tokens: 400, cache_read_tokens: 200, cache_creation_tokens: 100, total_tokens: 2400, cost_usd: 1 }]);
   expect(buttons()[index].getAttribute('aria-pressed')).toBe('true');
@@ -87,7 +87,7 @@ it.each([
   expect(capture.options?.scales?.cost?.display).toBe(true);
   expect(capture.options?.plugins).toHaveProperty('analysisTokenAverageLine');
   expect(capture.options?.plugins?.tooltip?.callbacks?.footer).toBeTypeOf('function');
-  expect(group().textContent).toMatch(/analysis_token_average/);
+  expect(group().textContent).toContain('Avg / uploaded day');
   expect(capture.data?.datasets.at(-1)?.data).toEqual([0]);
 });
 
