@@ -144,6 +144,17 @@ describe('AnalysisPanel token chart data', () => {
     expect(renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} />)).not.toContain('N/A — no tokens');
   });
 
+  it('preserves tiny positive aggregate rates and distinct currency ticks without changing upstream defaults', () => {
+    const analysis = { ...emptyAnalysis, token_usage: [tokenBucket({ total_tokens: 1_000_000_000, cost_usd: 0.00003 })], cost_summary: { total_cost_usd: 0.00003, cost_available: true } };
+    const html = renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} aggregateMode />);
+    expect(html).toContain('usage_stats.analysis_cost_per_million_tokens</dt><dd title="usage_stats.analysis_blended_rate">$0.00000003');
+    const callback = chartCapture.barOptions?.scales?.cost?.ticks?.callback;
+    expect(callback).toBeTypeOf('function');
+    expect([0, 0.000001, 0.000002].map((value, index) => callback!.call({} as never, value, index, []))).toEqual(['$0.0000', '$0.000001', '$0.000002']);
+    const upstream = renderToStaticMarkup(<AnalysisTestPanel analysis={analysis} />);
+    expect(upstream).toContain('usage_stats.analysis_cost_per_million_tokens</dt><dd title="usage_stats.analysis_blended_rate">$0.0000');
+  });
+
   it('keeps a genuine priced zero cost axis in aggregate mode', () => {
     renderToStaticMarkup(<AnalysisTestPanel analysis={{ ...emptyAnalysis, token_usage: [tokenBucket()] }} aggregateMode />);
     expect(chartCapture.barOptions?.scales?.cost?.display).toBe(true);

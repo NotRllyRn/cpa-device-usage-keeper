@@ -34,6 +34,13 @@ const relativeLuminance = (hex: string) => {
 }
 
 describe('UsagePage responsive layout and accessibility', () => {
+  it('lets aggregate average cards grow past the upstream mobile animation cap', () => {
+    const aggregate = styleRuleBlock(usagePageStyles, '.aggregateStatsRow');
+    expect(aggregate).toContain('.dailyAverageSlot { max-height: none; overflow: visible; }');
+    expect(aggregate).toContain('.dailyAverageSlot > .dailyAverageCard { height: auto; }');
+    expect(usagePageStyles).toContain('max-height: 220px;');
+  });
+
   it('lets dashboard page frames consume the mode-specific width cap', () => {
     for (const source of [usagePageStyles, keyOverviewPageStyles]) {
       expect(styleRuleBlock(source, '.pageFrame')).toContain('width: min(var(--keeper-page-max-width, 1245px), 100%);')

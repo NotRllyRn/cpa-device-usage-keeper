@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { calculateCacheReadRate, calculateDisplayInputTokens, resolveUsageFilterWindow } from '@/utils/usage';
+import { calculateCacheReadRate, calculateDisplayInputTokens, formatUsd, resolveUsageFilterWindow } from '@/utils/usage';
+
+describe('formatUsd small-value opt-in', () => {
+  it('preserves upstream formatting by default', () => {
+    expect(formatUsd(0.000003)).toBe('$0.0000');
+    expect(formatUsd(0)).toBe('$0.0000');
+  });
+
+  it('distinguishes small positive values from zero and from each other', () => {
+    expect([0, 0.000001, 0.000002].map(value => formatUsd(value, true))).toEqual(['$0.0000', '$0.000001', '$0.000002']);
+    expect(formatUsd(0.00000000003, true)).toBe('$0.00000000003');
+  });
+
+  it('does not change normal currency values when opted in', () => {
+    for (const value of [0, 0.0001, 0.25, 1, 12345]) expect(formatUsd(value, true)).toBe(formatUsd(value));
+  });
+});
 
 describe('resolveUsageFilterWindow', () => {
   it('resolves today from local day start through the refresh anchor', () => {

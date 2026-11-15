@@ -964,14 +964,17 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
     if (aggregateMode && options.scales) {
       if (options.scales.requests) options.scales.requests.display = false;
       if (options.scales.tokens) options.scales.tokens.display = metric !== 'cost';
-      if (options.scales.cost) options.scales.cost.display = hasPlottedCost && (metric === 'all' || metric === 'cost');
+      if (options.scales.cost) {
+        options.scales.cost.display = hasPlottedCost && (metric === 'all' || metric === 'cost');
+        options.scales.cost.ticks = { ...options.scales.cost.ticks, callback: (value) => formatUsd(Number(value), true) };
+      }
       const callbacks = options.plugins?.tooltip?.callbacks;
       if (callbacks) {
         const label = callbacks.label;
         callbacks.label = function (context) {
           if (context.dataset.yAxisID === 'cost') {
             const prefix = chartRows[context.dataIndex]?.costState === 'partial' ? 'Known cost subtotal — incomplete' : tokenLabels.cost;
-            return `${prefix}: ${formatUsd(context.parsed.y ?? 0)}`;
+            return `${prefix}: ${formatUsd(context.parsed.y ?? 0, true)}`;
           }
           return label?.call(this, context) ?? '';
         };
@@ -1010,7 +1013,7 @@ function TokenUsageChart({ rows, granularity, summary, loading, isDark, isMobile
           </div>
           <div>
             <dt>{t('usage_stats.analysis_cost_per_million_tokens')}</dt>
-            <dd title={t('usage_stats.analysis_blended_rate')}>{aggregateMode && totalTokens === 0 ? 'N/A — no tokens' : aggregateMode && hasUnavailableCost ? 'Unknown' : formatUsd(getCostRatePerMillion(totalCost, totalTokens))}</dd>
+            <dd title={t('usage_stats.analysis_blended_rate')}>{aggregateMode && totalTokens === 0 ? 'N/A — no tokens' : aggregateMode && hasUnavailableCost ? 'Unknown' : formatUsd(getCostRatePerMillion(totalCost, totalTokens), aggregateMode)}</dd>
           </div>
         </dl>
       )}
@@ -1527,7 +1530,7 @@ function Heatmap({ cells, apiKeys, apiKeyLabels, models, loading, isDark }: { ce
   const { t } = useTranslation();
   const aggregateMode = useAnalysisAggregate();
   const dimensionLabel = aggregateMode ? 'Device' : t('usage_stats.analysis_heatmap_api_key');
-  const displayCost = (cost: number, available: boolean) => aggregateMode && !available ? cost > 0 ? `Partial ${formatUsd(cost)}` : 'Unknown' : formatUsd(cost);
+  const displayCost = (cost: number, available: boolean) => aggregateMode && !available ? cost > 0 ? `Partial ${formatUsd(cost, true)}` : 'Unknown' : formatUsd(cost, aggregateMode);
   const [tooltip, setTooltip] = useState<FloatingTooltipState | null>(null);
   const cellMap = useMemo(() => new Map(cells.map((cell) => [`${cell.api_key}\0${cell.model}`, cell])), [cells]);
   // 固定汇总列按 API Key 聚合所有模型，确保与中间热力单元格使用同一数据口径。

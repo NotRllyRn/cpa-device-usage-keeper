@@ -94,11 +94,19 @@ const usdFormatters = {
     currency: 'USD',
     minimumFractionDigits: 4,
     maximumFractionDigits: 4
+  }),
+  small: new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumSignificantDigits: 3
   })
 };
 
-export function formatUsd(value: number): string {
-  return (value < 1 ? usdFormatters.precise : usdFormatters.standard)
+export function formatUsd(value: number, preserveSmallValues = false): string {
+  const formatter = preserveSmallValues && value > 0 && value < 0.0001
+    ? usdFormatters.small
+    : value < 1 ? usdFormatters.precise : usdFormatters.standard;
+  return formatter
     .format(value || 0)
     .replace(/^US\$/, '$');
 }

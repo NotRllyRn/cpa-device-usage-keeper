@@ -995,9 +995,14 @@
   @container (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @container (max-width: 600px) { grid-template-columns: minmax(0, 1fr); }
 
+  // Wrapped aggregate copy must size the card, not the upstream 220px animation cap.
+  .dailyAverageSlot { max-height: none; overflow: visible; }
+  .dailyAverageSlot > .dailyAverageCard { height: auto; }
+
   // Aggregate adapters have two daily metrics, not the upstream three.
   .dailyAverageCardHeader { flex-wrap: wrap; }
   .dailyAverageMetrics { grid-template-rows: repeat(2, auto); flex: 0; }
+  .dailyAverageMetricCopy { overflow-wrap: anywhere; }
   .dailyAverageMetric { grid-template-columns: 28px minmax(0, 1fr); gap: 6px 10px; }
   .dailyAverageMetricValue { grid-column: 2; font-size: 18px; white-space: nowrap; }
   .dailyAverageMetricLabel { white-space: normal; overflow: visible; color: var(--text-secondary); font-size: 12px; }

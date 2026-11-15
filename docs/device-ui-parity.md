@@ -135,6 +135,10 @@ both themes, and a deterministic screenshot matrix. `DEVICE_UI_SEEDS`,
 `DEVICE_UI_ACTIONS`, `DEVICE_UI_MODE=screens|fuzz|all`, and `DEVICE_UI_OUTPUT`
 override these settings. Output includes `report.json` (coverage and limitations),
 per-seed replay sequences, and screenshots; failures include the action and image.
+Checks include full-page unavailable/loading states without false zero metrics,
+reported-zero preservation, average-card content containment at 320px, and long-word
+stress. Device-only currency precision keeps tiny positive costs distinct from zero;
+unit tests preserve the default upstream formatting.
 CSS 200% zoom is only a proxy, not a native browser-zoom or assistive-tech check.
 
 These tests do not establish deployed CPA plugin compatibility or replace native

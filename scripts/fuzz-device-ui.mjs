@@ -35,10 +35,10 @@ const server = createServer(async (req, res) => {
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ headless: true, executablePath: process.env.DEVICE_TEST_CHROMIUM || undefined });
-async function makePage(width = 1440, theme = 'light', collapsed = false) {
+async function makePage(width = 1440, theme = 'light', collapsed = false, initialMode = 'partial') {
   const context = await browser.newContext({ viewport: { width, height: 1000 }, colorScheme: theme, reducedMotion: 'reduce', serviceWorkers: 'block' });
   const page = await context.newPage();
-  const state = { mode: 'partial', delay: 0, requests: [], errors: [] };
+  const state = { mode: initialMode, delay: 0, requests: [], errors: [] };
   page.on('pageerror', e => state.errors.push(e.message));
   await page.clock.setFixedTime(now);
   await page.addInitScript(({ collapsed }) => {
@@ -145,8 +145,31 @@ async function invariant(page, state) {
   for (const control of await page.locator('[data-dashboard-toolbar] button:visible,[data-dashboard-toolbar] [role="combobox"]:visible').all()) {
     assert.ok((await control.getAttribute('aria-label')) || (await control.innerText()).trim(), 'Toolbar control needs an accessible name');
   }
+  const average = page.locator('[data-device-average]');
+  if (await average.count()) {
+    const clipped = await average.evaluate(card => {
+      const bounds = card.getBoundingClientRect();
+      return [...card.querySelectorAll('strong,[class*="dailyAverageMetricCopy"],[class*="dailyAverageRangePill"]')].filter(el => {
+        const box = el.getBoundingClientRect();
+        return box.bottom > bounds.bottom + 1 || box.right > bounds.right + 1 || box.left < bounds.left - 1 || el.scrollWidth > el.clientWidth + 1;
+      }).map(el => el.textContent);
+    });
+    assert.deepEqual(clipped, [], 'Average card must contain every wrapped qualifier and complete numeric value');
+    count('average:content-contained');
+  }
   if (state.mode === 'error') {
     for (const card of await page.locator('[data-device-stat]').all()) assert.ok(!/[0-9$%]/.test(await card.innerText()), 'Failed initial metrics must be unavailable, never zero');
+    if (await page.locator('[data-device-stat-row]').count()) {
+      assert.equal(await page.locator('[data-device-overview-state="unavailable"]').count(), 1);
+      assert.equal(await page.locator('[data-activity-summary],canvas').count(), 0, 'Unavailable dependent charts must not claim zero usage');
+      assert.doesNotMatch(await page.locator('body').innerText(), /(?:Input|Output)\s*0\b|\b0\s*Tokens\b|No usage for this metric/i, 'Full failed Overview must not contain zero metric claims');
+      count('overview:full-page-unavailable');
+    }
+  }
+  if (state.mode === 'zero' && await page.locator('[data-device-stat-row]').count()) {
+    assert.equal(await page.locator('[data-activity-summary="token"]').count(), 1, 'Successful reported zero keeps its activity summary');
+    assert.equal(await page.locator('[data-device-stat="tokens"]').getAttribute('data-token-total'), '0');
+    count('overview:reported-zero-retained');
   }
   const request = stateRequest(page);
   if (request !== '/'  && state.mode !== 'error') {
@@ -191,6 +214,18 @@ async function pricingValidation(page, state, capture = false) {
 function random(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 try {
   if (mode !== 'fuzz') {
+    if (phase !== 'baseline') for (const theme of ['light', 'dark']) for (const width of [390, 1440]) {
+      const { page, state, context } = await makePage(width, theme, false, 'error'); pageStates.set(page, state);
+      await invariant(page, state);
+      await screenshot(page, `initial-unavailable-${theme}-${width}`, { theme, width, tab: 'Overview', fullPage: true, section: 'Full-page initial failure, no zero chart claims' });
+      state.mode = 'zero'; await page.locator('[data-dashboard-refresh]').click(); await settled(page); await invariant(page, state);
+      await screenshot(page, `reported-zero-${theme}-${width}`, { theme, width, tab: 'Overview', fullPage: true, section: 'Successful uploaded zero remains zero' });
+      state.delay = 1500; await page.locator('[data-dashboard-refresh]').click();
+      await page.locator('[data-device-overview-state="loading"]').waitFor();
+      assert.equal(await page.locator('[data-activity-summary],canvas').count(), 0, 'Loading details have no zero metric claims');
+      await screenshot(page, `loading-details-${theme}-${width}`, { theme, width, tab: 'Overview', fullPage: true, section: 'Honest loading placeholder' });
+      await settled(page); state.delay = 0; count('overview:loading-details'); await context.close();
+    }
     for (const theme of ['light', 'dark']) for (const width of widths) for (const collapsed of [false, true]) {
       const { page, state, context } = await makePage(width, theme, collapsed); pageStates.set(page, state);
       await select(page, 'Device', 1); await select(page, 'Agent', 1); await select(page, 'Model family', 4);
@@ -200,6 +235,13 @@ try {
         await screenshot(page, `overview-${theme}-${width}-${collapsed ? 'collapsed' : 'expanded'}-${range}`, meta);
         // Baseline deliberately records failures without stopping the comparison.
         try { await invariant(page, state); } catch (e) { report.failures.push({ ...meta, error: e.message }); }
+      }
+      if (phase !== 'baseline' && width === 320) {
+        const hint = page.locator('[data-device-average] [class*="dailyAverageCostHint"]').first();
+        const text = await hint.innerText();
+        await hint.evaluate(el => { el.textContent = 'SyntheticUnbrokenCoverageQualifier'.repeat(5); });
+        try { await invariant(page, state); count('average:long-word-stress'); } catch (e) { report.failures.push({ theme, width, collapsed, section: 'Long-word average containment', error: e.message }); }
+        await hint.evaluate((el, value) => { el.textContent = value; }, text);
       }
       await context.close();
     }
@@ -253,6 +295,13 @@ try {
             count('matrix:sticky-labels-verified');
             await screenshot(page, `matrix-totals-${data}-${theme}-${width}`, { ...meta, section: 'Device × Model scrolled to totals' });
             await page.evaluate(() => window.scrollTo(0, 0));
+          }
+          if (tab === 'Analysis' && data === 'small') {
+            const rate = await page.locator('[class*="analysisSummary"] dd').nth(2).innerText();
+            assert.ok(Number(rate.replace(/[,$]/g, '')) > 0, 'Tiny positive unit cost must not become zero');
+            await page.getByRole('button', { name: /^Total Cost$/i }).click();
+            await screenshot(page, `tiny-cost-only-${theme}-${width}`, { ...meta, section: 'Adaptive small-dollar unit rate and cost-axis ticks' });
+            count('cost:tiny-positive-distinguished');
           }
         }
       }
@@ -331,7 +380,12 @@ try {
           state.mode = ['loading', 'race'].includes(action.value) ? 'partial' : action.value;
           state.delay = action.value === 'loading' || action.value === 'race' ? 300 : 0;
           await page.locator('[data-dashboard-refresh]').click();
-          if (state.delay) { await page.locator('[data-dashboard-refresh][aria-busy="true"]').waitFor(); count('loading:observed'); }
+          if (state.delay) {
+            await page.locator('[data-dashboard-refresh][aria-busy="true"]').waitFor();
+            await page.locator('[data-device-overview-state="loading"]').waitFor();
+            assert.equal(await page.locator('[data-activity-summary],canvas').count(), 0, 'Loading details do not claim zero usage');
+            count('loading:observed');
+          }
           if (action.value === 'race') {
             // Supersede the slow Overview response before it resolves.
             await navigate(page, 'Analysis'); count('race:superseded-overview');
