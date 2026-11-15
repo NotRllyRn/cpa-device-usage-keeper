@@ -14,7 +14,9 @@ Exact supported patterns (Go regular expressions, after those prefixes):
 - Anthropic / Claude: `^claude-((opus|sonnet|haiku)-[34]([.-][0-9]+)*|[34]([.-][0-9]+)*-(opus|sonnet|haiku)|(instant-)?[12](\.[0-9]+)?)(-(latest|thinking|[0-9]{8}))?$`
 - MiniMax: `^minimax-m[12](\.[0-9]+)?(-(highspeed|lightning))?$`
 
-These are conservative name patterns, not a complete model registry or model-existence check. New families, aliases, bare `M2.7`, `gpt-oss`, and names such as `my-gpt-5.4` stay unknown. No inference uses an arbitrary substring or the reporting agent's name.
+Explicit deployment compatibility aliases also map exactly to `openai`: `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, and `gpt-6.1-sol`. The operator confirmed these deployed names as the same OpenAI family. This is a compatibility label, not a claim that these are public model IDs or evidence of the serving provider. The same client-prefix and agreeing-namespace rules apply, including `[pi] ` variants. `gpt-5.5` already matches the standard pattern. Other aliases, such as `gpt-6-terra`, `gpt-6.1-luna` or `gpt-5.6-astra`, remain unknown; no suffix or new GPT generation is generalized from this list.
+
+These are conservative name patterns plus explicit compatibility aliases, not a complete model registry or model-existence check. New families, other aliases, bare `M2.7`, `gpt-oss`, and names such as `my-gpt-5.4` stay unknown. No inference uses an arbitrary substring or the reporting agent's name.
 
 ## Totals and limitations
 

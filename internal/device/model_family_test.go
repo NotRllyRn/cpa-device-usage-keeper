@@ -300,3 +300,88 @@ func TestModelFamilyAnalysisBounds(t *testing.T) {
 		t.Fatalf("unmatched dimensions: %+v %v", out, err)
 	}
 }
+
+func TestModelFamilyDeploymentCompatibility(t *testing.T) {
+	// Keep this operator-confirmed list independent of the implementation map.
+	// gpt-5.5 must continue working without a compatibility alias.
+	names := []string{"gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol", "gpt-5.5"}
+	for _, name := range names {
+		for _, client := range []string{"", "[pi] ", "[hermes] ", "[codex] "} {
+			for _, namespace := range []string{"", "openai/", "openai-codex/"} {
+				if got := modelFamily(client + namespace + name); got != "openai" {
+					t.Fatalf("%q: %s", client+namespace+name, got)
+				}
+			}
+		}
+		for _, invalid := range []string{"anthropic/" + name, "[pi] minimax/" + name, "custom/" + name, "[custom] " + name, "my-" + name, name + "-copy"} {
+			if got := modelFamily(invalid); got != "unknown" {
+				t.Fatalf("%q: %s", invalid, got)
+			}
+		}
+	}
+	for _, name := range []string{"gpt-6", "gpt-6.1", "gpt-6-terra", "gpt-6.1-luna", "gpt-5.6-astra", "gpt-6-astra-2026-01-01", "gpt-6.2-sol"} {
+		if got := modelFamily(name); got != "unknown" {
+			t.Fatalf("generalized alias %q: %s", name, got)
+		}
+	}
+
+	dir := t.TempDir()
+	os.Chmod(dir, 0700)
+	s, err := OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	for _, name := range names {
+		id, token, err := s.Enroll(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, agent := range []string{"pi", "hermes", "codex"} {
+			snapshot := sample()
+			snapshot.Agent, snapshot.Day = agent, "2024-01-01"
+			snapshot.Models = []Model{{Name: "anthropic/" + name, Tokens: Tokens{Input: 999}}}
+			snapshot.Totals, snapshot.TotalTokens = Tokens{Input: 999}, 999
+			if _, err := s.Apply(token, snapshot); err != nil {
+				t.Fatal(err)
+			}
+			day := "2024-01-0" + strconv.Itoa(i+2)
+			identity := name
+			if agent == "pi" {
+				identity = "[pi] " + name
+			}
+			if agent == "codex" {
+				identity = "openai-codex/" + name
+			}
+			snapshot.Day = day
+			snapshot.Models = []Model{
+				{Name: identity, Tokens: Tokens{Input: 10}},
+				{Name: "claude-opus-4-6", Tokens: Tokens{Input: 20}},
+				{Name: "MiniMax-M2.7", Tokens: Tokens{Input: 30}},
+			}
+			snapshot.Totals, snapshot.TotalTokens = Tokens{Input: 60}, 60
+			if _, err := s.Apply(token, snapshot); err != nil {
+				t.Fatal(err)
+			}
+			for _, read := range []func(context.Context, string, string, string, string, string) (Overview, error){s.Overview, s.Analysis} {
+				out, err := read(ctx, id, agent, "", "", "openai")
+				if err != nil || out.Total.Total != 10 || out.Snapshots != 1 || len(out.Models) != 1 || out.Models[0].Key != identity || out.Total.Coverage.Missing != 1 {
+					t.Fatalf("%s %s: %+v %v", agent, name, out, err)
+				}
+			}
+			boundary, err := s.EarliestUsageDay(ctx, id, agent, "openai")
+			if err != nil || boundary == nil || *boundary != day {
+				t.Fatalf("%s %s boundary: %v %v", agent, name, boundary, err)
+			}
+		}
+	}
+	out, err := s.Analysis(ctx, "", "", "", "", "openai")
+	if err != nil || out.Total.Total != 240 || out.Snapshots != 24 || len(out.Models) != 24 || out.Total.Coverage.Missing != 24 {
+		t.Fatalf("cross-agent compatibility: %+v %v", out, err)
+	}
+	boundary, err := s.EarliestUsageDay(ctx, "", "", "openai")
+	if err != nil || boundary == nil || *boundary != "2024-01-02" {
+		t.Fatalf("cross-agent boundary: %v %v", boundary, err)
+	}
+}

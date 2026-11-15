@@ -16,6 +16,19 @@ var familyPatterns = []struct {
 	{"minimax", regexp.MustCompile(`^minimax-m[12](\.[0-9]+)?(-(highspeed|lightning))?$`)},
 }
 
+// Explicit deployment compatibility names, confirmed by the operator. These
+// classify a family label only; they do not assert public model existence or
+// identify the service handling requests. Do not generalize their suffixes.
+var compatibilityFamilies = map[string]string{
+	"gpt-5.6-luna":  "openai",
+	"gpt-5.6-sol":   "openai",
+	"gpt-5.6-terra": "openai",
+	"gpt-6-astra":   "openai",
+	"gpt-6-luna":    "openai",
+	"gpt-6-sol":     "openai",
+	"gpt-6.1-sol":   "openai",
+}
+
 func validModelFamily(family string) bool {
 	return family == "" || family == "openai" || family == "anthropic" || family == "minimax" || family == "unknown"
 }
@@ -41,6 +54,9 @@ func modelFamily(name string) string {
 			return "unknown"
 		}
 		name = rest
+	}
+	if family, ok := compatibilityFamilies[name]; ok && (provider == "" || provider == family) {
+		return family
 	}
 	for _, rule := range familyPatterns {
 		if rule.pattern.MatchString(name) && (provider == "" || provider == rule.family) {
